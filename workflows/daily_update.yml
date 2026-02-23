@@ -1,6 +1,9 @@
 name: Daily XRPBurn Update
 
 on:
+push:
+    branches: [ main ]
+  workflow_dispatch:
   schedule:
     - cron: '0 22 * * *'  # 6:00 AM Singapore Time (SGT = UTC+8)
   workflow_dispatch:      # Allows the "Update Now" manual trigger
