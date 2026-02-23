@@ -1,1 +1,14 @@
-[]
+[
+    {
+        "date": "2026-02-23",
+        "burn_xrp": 450,
+        "load_usd_m": 2100,
+        "transactions": 1.2,
+        "categories": {
+            "settlement": 0.8,
+            "identity": 0.2,
+            "defi": 0.15,
+            "acct_mgmt": 0.05
+        }
+    }
+]
