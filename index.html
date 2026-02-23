@@ -44,15 +44,16 @@
         let loadChartInstance = null;
         let txChartInstance = null;
 
+        // Custom Plugin for Weekend Dots (Blue for Sat, Red for Sun)
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
                 const isMonthly = document.getElementById('rollup-toggle').checked;
-                if (isMonthly) return;
+                if (isMonthly) return; // Dots only show on daily view
                 const { ctx, scales: { x } } = chart;
                 chart.data.labels.forEach((label, i) => {
                     const date = new Date(label);
-                    const day = date.getDay(); // 6 = Sat, 0 = Sun
+                    const day = date.getDay(); // 0 = Sun, 6 = Sat
                     if (day === 6 || day === 0) {
                         ctx.fillStyle = (day === 6) ? 'blue' : 'red';
                         ctx.beginPath();
@@ -63,13 +64,23 @@
             }
         };
 
+        // Fetches data.json and updates the "Last updated" timestamp
         async function loadData() {
-            const response = await fetch('data.json');
-            rawData = await response.json();
-            if (rawData.length > 0) {
-                document.getElementById('last-update').innerText = rawData[rawData.length - 1].date + " 06:00";
+            try {
+                const response = await fetch('data.json');
+                rawData = await response.json();
+                
+                if (rawData.length > 0) {
+                    // Pull the precise timestamp from the last entry in the JSON array
+                    const lastEntry = rawData[rawData.length - 1];
+                    // Updated to use the 'last_updated' field from generate_data.py
+                    document.getElementById('last-update').innerText = lastEntry.last_updated || lastEntry.date;
+                }
+                
+                renderCharts();
+            } catch (error) {
+                console.error("Error loading data:", error);
             }
-            renderCharts();
         }
 
         function renderCharts() {
@@ -82,12 +93,17 @@
 
             let displayData = rawData;
 
-            // Monthly Rollup Logic
+            // Monthly Rollup Logic (Averages daily data for the month)
             if (isMonthly) {
                 const monthly = {};
                 rawData.forEach(d => {
-                    const month = d.date.substring(0, 7);
-                    if (!monthly[month]) monthly[month] = { burn: 0, load: 0, tx: 0, count: 0, cats: { settlement: 0, identity: 0, defi: 0, acct_mgmt: 0 } };
+                    const month = d.date.substring(0, 7); // Format: YYYY-MM
+                    if (!monthly[month]) {
+                        monthly[month] = { 
+                            burn: 0, load: 0, tx: 0, count: 0, 
+                            cats: { settlement: 0, identity: 0, defi: 0, acct_mgmt: 0 } 
+                        };
+                    }
                     monthly[month].burn += d.burn_xrp;
                     monthly[month].load += d.load_usd_m;
                     monthly[month].tx += d.transactions;
@@ -107,7 +123,7 @@
                 }));
             }
 
-            // 1. LOAD CHART (Stacked Bars + Line)
+            // 1. LOAD CHART (Categorized Stacked Bars + XRP Burn Line)
             loadChartInstance = new Chart(loadCtx, {
                 type: 'bar',
                 data: {
@@ -121,6 +137,8 @@
                     ]
                 },
                 options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
                     scales: {
                         x: { stacked: true },
                         y: { stacked: true, title: { display: true, text: 'USD Load (Millions)' } },
@@ -130,7 +148,7 @@
                 plugins: [weekendDotsPlugin]
             });
 
-            // 2. TRANSACTION CHART
+            // 2. TRANSACTION CHART (Daily/Monthly Volume)
             txChartInstance = new Chart(txCtx, {
                 type: 'bar',
                 data: {
@@ -138,6 +156,8 @@
                     datasets: [{ label: 'Total Transactions (Millions)', data: displayData.map(d => d.transactions), backgroundColor: '#1f77b4' }]
                 },
                 options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true, title: { display: true, text: 'Transactions (M)' } } }
                 },
                 plugins: [weekendDotsPlugin]
@@ -146,6 +166,7 @@
 
         function triggerUpdate() {
             alert("Opening GitHub Actions to run manual update...");
+            // Corrected to use the standard GitHub Actions URL for your repository
             window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
         }
 
