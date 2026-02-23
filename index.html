@@ -26,12 +26,12 @@
     </div>
 
     <div class="chart-wrapper">
-        <h3>Network Load (Categorized) vs. XRP Burn</h3>
+        <h3>Network Load (Categorized USD M) vs. XRP Burn</h3>
         <canvas id="loadChart"></canvas>
     </div>
 
     <div class="chart-wrapper">
-        <h3>Transaction Breakdown</h3>
+        <h3>Transaction Breakdown (Categorized Millions)</h3>
         <canvas id="txChart"></canvas>
     </div>
 
@@ -44,16 +44,15 @@
         let loadChartInstance = null;
         let txChartInstance = null;
 
-        // Custom Plugin for Weekend Dots (Blue for Sat, Red for Sun)
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
                 const isMonthly = document.getElementById('rollup-toggle').checked;
-                if (isMonthly) return; // Dots only show on daily view
+                if (isMonthly) return;
                 const { ctx, scales: { x } } = chart;
                 chart.data.labels.forEach((label, i) => {
                     const date = new Date(label);
-                    const day = date.getDay(); // 0 = Sun, 6 = Sat
+                    const day = date.getDay();
                     if (day === 6 || day === 0) {
                         ctx.fillStyle = (day === 6) ? 'blue' : 'red';
                         ctx.beginPath();
@@ -64,19 +63,14 @@
             }
         };
 
-        // Fetches data.json and updates the "Last updated" timestamp
         async function loadData() {
             try {
                 const response = await fetch('data.json');
                 rawData = await response.json();
-                
                 if (rawData.length > 0) {
-                    // Pull the precise timestamp from the last entry in the JSON array
                     const lastEntry = rawData[rawData.length - 1];
-                    // Updated to use the 'last_updated' field from generate_data.py
                     document.getElementById('last-update').innerText = lastEntry.last_updated || lastEntry.date;
                 }
-                
                 renderCharts();
             } catch (error) {
                 console.error("Error loading data:", error);
@@ -93,11 +87,10 @@
 
             let displayData = rawData;
 
-            // Monthly Rollup Logic (Averages daily data for the month)
             if (isMonthly) {
                 const monthly = {};
                 rawData.forEach(d => {
-                    const month = d.date.substring(0, 7); // Format: YYYY-MM
+                    const month = d.date.substring(0, 7);
                     if (!monthly[month]) {
                         monthly[month] = { 
                             burn: 0, load: 0, tx: 0, count: 0, 
@@ -123,16 +116,22 @@
                 }));
             }
 
-            // 1. LOAD CHART (Categorized Stacked Bars + XRP Burn Line)
+            const colors = {
+                settlement: '#2ca02c',
+                identity: '#9467bd',
+                defi: '#ff7f0e',
+                acct_mgmt: '#7f7f7f'
+            };
+
             loadChartInstance = new Chart(loadCtx, {
                 type: 'bar',
                 data: {
                     labels: displayData.map(d => d.date),
                     datasets: [
-                        { label: 'Settlement', data: displayData.map(d => d.categories.settlement), backgroundColor: '#2ca02c', stack: 'Stack 0' },
-                        { label: 'Identity', data: displayData.map(d => d.categories.identity), backgroundColor: '#9467bd', stack: 'Stack 0' },
-                        { label: 'DeFi', data: displayData.map(d => d.categories.defi), backgroundColor: '#ff7f0e', stack: 'Stack 0' },
-                        { label: 'Account Mgmt', data: displayData.map(d => d.categories.acct_mgmt), backgroundColor: '#7f7f7f', stack: 'Stack 0' },
+                        { label: 'Settlement', data: displayData.map(d => d.categories.settlement), backgroundColor: colors.settlement, stack: 'Stack 0' },
+                        { label: 'Identity', data: displayData.map(d => d.categories.identity), backgroundColor: colors.identity, stack: 'Stack 0' },
+                        { label: 'DeFi', data: displayData.map(d => d.categories.defi), backgroundColor: colors.defi, stack: 'Stack 0' },
+                        { label: 'Account Mgmt', data: displayData.map(d => d.categories.acct_mgmt), backgroundColor: colors.acct_mgmt, stack: 'Stack 0' },
                         { label: 'Actual XRP Burn', data: displayData.map(d => d.burn_xrp), borderColor: 'red', type: 'line', yAxisID: 'y1', tension: 0.1 }
                     ]
                 },
@@ -148,17 +147,24 @@
                 plugins: [weekendDotsPlugin]
             });
 
-            // 2. TRANSACTION CHART (Daily/Monthly Volume)
             txChartInstance = new Chart(txCtx, {
                 type: 'bar',
                 data: {
                     labels: displayData.map(d => d.date),
-                    datasets: [{ label: 'Total Transactions (Millions)', data: displayData.map(d => d.transactions), backgroundColor: '#1f77b4' }]
+                    datasets: [
+                        { label: 'Settlement', data: displayData.map(d => d.categories.settlement), backgroundColor: colors.settlement, stack: 'Stack 0' },
+                        { label: 'Identity', data: displayData.map(d => d.categories.identity), backgroundColor: colors.identity, stack: 'Stack 0' },
+                        { label: 'DeFi', data: displayData.map(d => d.categories.defi), backgroundColor: colors.defi, stack: 'Stack 0' },
+                        { label: 'Account Mgmt', data: displayData.map(d => d.categories.acct_mgmt), backgroundColor: colors.acct_mgmt, stack: 'Stack 0' }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Transactions (M)' } } }
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Transactions (Millions)' } }
+                    }
                 },
                 plugins: [weekendDotsPlugin]
             });
@@ -166,7 +172,6 @@
 
         function triggerUpdate() {
             alert("Opening GitHub Actions to run manual update...");
-            // Corrected to use the standard GitHub Actions URL for your repository
             window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
         }
 
