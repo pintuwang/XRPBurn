@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>XRPBurn Analysis Daily</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
+        #chart-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .dot-legend { font-size: 0.8em; margin-top: 10px; }
+        button { padding: 8px 15px; cursor: pointer; background: #0c2c56; color: white; border: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>XRPBurn Analysis Daily</h1>
+    <p>Last updated: <span id="last-update">-</span> (SGT)</p>
+
+    <div class="controls">
+        <button onclick="triggerUpdate()">Update Now</button>
+        <label>
+            <input type="checkbox" id="rollup-toggle" onchange="renderChart()"> Roll up to Monthly
+        </label>
+    </div>
+
+    <div id="chart-container">
+        <canvas id="xrpChart"></canvas>
+    </div>
+
+    <div class="dot-legend">
+        🔵 Saturday | 🔴 Sunday
+    </div>
+
+    <script>
+        let rawData = [];
+        let chartInstance = null;
+
+        async function loadData() {
+            const response = await fetch('data.json');
+            rawData = await response.json();
+            document.getElementById('last-update').innerText = rawData[rawData.length - 1].date + " 06:00";
+            renderChart();
+        }
+
+        function renderChart() {
+            const isMonthly = document.getElementById('rollup-toggle').checked;
+            const ctx = document.getElementById('xrpChart').getContext('2d');
+            
+            if (chartInstance) chartInstance.destroy();
+
+            let displayData = rawData;
+            if (isMonthly) {
+                // Monthly Rollup Logic
+                const monthly = {};
+                rawData.forEach(d => {
+                    const month = d.date.substring(0, 7);
+                    if (!monthly[month]) monthly[month] = { burn: 0, load: 0, count: 0 };
+                    monthly[month].burn += d.burn_xrp;
+                    monthly[month].load += d.load_usd_m;
+                    monthly[month].count++;
+                });
+                displayData = Object.keys(monthly).map(m => ({
+                    date: m, 
+                    burn_xrp: monthly[m].burn / monthly[m].count, 
+                    load_usd_m: monthly[m].load / monthly[m].count 
+                }));
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: displayData.map(d => d.date),
+                    datasets: [{
+                        label: 'XRP Burned',
+                        data: displayData.map(d => d.burn_xrp),
+                        borderColor: 'red',
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Network Load (USD M)',
+                        data: displayData.map(d => d.load_usd_m),
+                        borderColor: 'blue',
+                        backgroundColor: 'rgba(0,0,255,0.1)',
+                        fill: true,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { position: 'left', title: { display: true, text: 'XRP Burned' } },
+                        y1: { position: 'right', title: { display: true, text: 'USD Load (Millions)' }, grid: { drawOnChartArea: false } }
+                    },
+                    plugins: {
+                        // Custom Plugin for Weekend Dots
+                        legend: { display: true }
+                    }
+                },
+                plugins: [{
+                    id: 'weekendDots',
+                    afterDraw: (chart) => {
+                        if (isMonthly) return;
+                        const { ctx, scales: { x } } = chart;
+                        chart.data.labels.forEach((label, i) => {
+                            const date = new Date(label);
+                            const day = date.getDay(); // 6 = Sat, 0 = Sun
+                            if (day === 6 || day === 0) {
+                                ctx.fillStyle = (day === 6) ? 'blue' : 'red';
+                                ctx.beginPath();
+                                ctx.arc(x.getPixelForValue(label), x.bottom + 15, 4, 0, 2 * Math.PI);
+                                ctx.fill();
+                            }
+                        });
+                    }
+                }]
+            });
+        }
+
+        function triggerUpdate() {
+            alert("Triggering GitHub Action Update... (Ensure you have configured Repository Dispatch in your repo settings)");
+            // In a real setup, you'd use fetch() to trigger a GitHub Workflow Dispatch via API
+            window.location.href = "https://github.com/YOUR_USERNAME/XRPBurn/actions";
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
