@@ -115,11 +115,13 @@
             });
         }
 
+
         function triggerUpdate() {
-            alert("Triggering GitHub Action Update... (Ensure you have configured Repository Dispatch in your repo settings)");
-            // In a real setup, you'd use fetch() to trigger a GitHub Workflow Dispatch via API
-            window.location.href = "https://github.com/pintuwang/XRPBurn/actions";
+    alert("Opening GitHub Actions to run manual update...");
+    // Direct link to the specific workflow to make finding the 'Run workflow' button easier
+    window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
         }
+       
 
         window.onload = loadData;
     </script>
