@@ -11,5 +11,18 @@
             "defi": 0.3,
             "acct_mgmt": 0.12
         }
+    },
+    {
+        "date": "2026-02-24",
+        "last_updated": "2026-02-24 06:41:28",
+        "burn_xrp": 442,
+        "load_usd_m": 2120,
+        "transactions": 1.1,
+        "categories": {
+            "settlement": 1.3,
+            "identity": 0.4,
+            "defi": 0.3,
+            "acct_mgmt": 0.12
+        }
     }
 ]
