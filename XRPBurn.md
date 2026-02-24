@@ -1,52 +1,62 @@
-I have drafted the guide for you in Markdown format. You can copy the text below and save it as a file named `XRPBurn.md` to keep with your project documentation.
+To ensure full alignment between your analytics guide and the actual dashboard implementation, here is the updated **XRPBurn.md**. This version precisely matches the hex colors, weekend markers, and data logic used in your `index.html` and `generate_data.py`.
 
 ---
 
-# XRPBurn.md: Understanding the XRPL Institutional Dashboard
+# XRPBurn Institutional Analytics Guide
 
-This guide provides a detailed breakdown of the metrics used to track the health, utility, and deflationary pressure of the XRP Ledger. It is designed to help distinguish between "Network Noise" and "Institutional Value."
+This document serves as the reference for interpreting the **XRPBurn Analysis Daily** dashboard. It aligns with the hourly "growing stack" logic and the institutional categorization of the XRP Ledger (XRPL).
 
----
+## 📊 Dashboard Overview
 
-## 1. The Financial Dashboard (Network Load in USD)
+The dashboard tracks two primary signals:
 
-This chart tracks the **Economic Throughput**—the actual dollar value moving through the ledger. It represents the "Weight" of the network.
+1. **Network Load (Top Chart):** The economic weight (USD Millions) moving through the ledger.
+2. **Transaction Breakdown (Bottom Chart):** The raw volume (Millions) of ledger activity.
 
-### **Categories:**
+### 🎨 Color & Category Mapping
 
-* **Institutional FX / Bridge (Dark Blue):** This is the highest quality metric. It represents large-scale settlements between regulated entities (e.g., Zand Bank to Société Générale). It tracks cross-currency swaps where XRP acts as the bridge. High volume here indicates real-world utility.
-* **Stablecoin Settlement (Mid Blue):** Tracks the movement of regulated stablecoins like **RLUSD**, **EURCV**, and **USDC**. This is the "liquidity grease" of the network. A spike here often precedes a surge in FX settlements.
-* **XRP Native Liquidity (Light Blue):** Tracks standard XRP movements between wallets and centralized exchanges. This is often driven by speculative trading or "whale" movements.
-* **DeFi / AMM Pool Value (Light Green):** Represents the value locked or traded within the Decentralized Exchange pools. It shows the growth of the on-chain financial ecosystem.
+To maintain institutional clarity, both charts use a consistent color-coding scheme:
 
----
-
-## 2. The Operational Dashboard (Transaction Categories)
-
-This chart tracks the **Raw Activity**—the volume and type of actions being taken. It represents the "Utility" of the network.
-
-### **Categories:**
-
-* **Settlement (Green):** Includes standard `Payment` and `Cross-Currency Payment` types. This is the core engine of the ledger.
-* **Identity (Purple):** Tracks `CredentialCreate` and `CredentialAccept` transactions. This is a leading indicator of **Institutional Onboarding**. When banks like Standard Chartered "handshake" with the ledger, it appears here first.
-* **DeFi (Orange):** Tracks AMM creation, deposits, and rebalancing. This is the "Pathfinding" engine. High activity here contributes significantly to the **XRP Burn** due to the complexity of the swaps.
-* **Account Management (Gray):** Includes `AccountDelete` and `SignerListSet`. **Note:** This is a high-burn category. Every account deletion destroys **2 XRP**, often causing spikes in the burn rate that aren't related to transaction volume.
-* **NFT / Retail (Pink):** Tracks `NFToken` actions and retail limit orders. This represents the speculative and consumer side of the ledger.
+* 🟢 **Settlement (`#2ca02c`)**: Represents cross-currency payments and high-value FX tranches. This is the primary "Institutional Pulse" indicator.
+* 🟣 **Identity (`#9467bd`)**: Represents DID (Decentralized Identity) handshakes and bank-grade onboarding activity (e.g., Standard Chartered/Zand-style credentials).
+* 🟠 **DeFi (`#ff7f0e`)**: Represents Automated Market Maker (AMM) swaps and pathfinding activity.
+* ⚪ **Account Management (`#7f7f7f`)**: Represents multi-sig configurations, wallet deletions, and governance-level operations.
 
 ---
 
-## 3. The XRP Burn (The Red Line)
+## 📈 Key Indicators & Thresholds
 
-The Red Line tracks the **Actual Burn**—the XRP permanently destroyed and removed from the total supply.
+### 1. The 1,000 XRP Burn Threshold
 
-* **The 1,000 XRP Threshold:** This is the "Stress Test" level. Crossing this indicates either extreme network congestion or a high volume of complex, multi-hop institutional swaps.
-* **Efficiency vs. Deflation:** On the XRPL, a high **Load (USD)** does not always equal a high **Burn (XRP)**. Because the ledger is highly efficient, millions of dollars can move for a fraction of a cent.
-* **The Signal:** You are looking for a **Divergence**. If the **Load** stays high while the **Burn** spikes, it means the network is reaching its "Utility Ceiling," where the cost of doing business (fees) is rising due to high demand for block space.
+* **Visual:** A red dashed line on the top chart.
+* **Significance:** This is the "Deflationary Trigger." Under normal efficiency, the ledger burns <500 XRP/day. If the burn line (Solid Red) crosses this threshold, it indicates network congestion or high-priority fee scaling, signaling a shift from "High Efficiency" to "High Urgency" settlement.
+
+### 2. Weekend Markers (The Dot Legend)
+
+Located at the bottom of each chart to identify volume shifts:
+
+* 🔵 **Blue Dot (Saturday)**: Often identifies the "Retail Pulse" or testing phases.
+* *Reference:* **The Zand Spike (Feb 21)**. A divergence where Transaction Count (Bottom) increases while Network Load (Top) decreases suggests high-volume, low-value retail or test transactions.
+
+
+* 🔴 **Red Dot (Sunday)**: Represents the typical institutional lull before the Monday market overlap.
 
 ---
 
-## Summary for the Analyst
+## 🕒 Data Execution Logic
 
-* **Bullish Utility:** Increasing **Institutional FX (Load)** + Increasing **Identity (Transactions)**.
-* **Bullish Deflation:** Increasing **DeFi (Transactions)** + **XRP Burn** approaching 1,000.
-* **Speculative Noise:** High **NFT/Retail (Transactions)** with low **Institutional FX (Load)**.
+### The "Growing Stack" (Hourly Updates)
+
+The dashboard uses an incremental update system triggered via GitHub Actions:
+
+* **Consolidation:** Data is consolidated on a **Singapore Time (SGT)** basis.
+* **Intra-day Growth:** Between 12:00 AM and 11:59 PM SGT, the "Today" bar on the chart is not a final value. It grows 24 times throughout the day as hourly tranches are added.
+* **Heartbeat:** The "Last Updated" timestamp on the dashboard confirms the exact hour of the current "stack" progress.
+
+---
+
+## 🔍 Institutional Analyst Notes
+
+* **High-Quality Load:** A high ratio of **Settlement (Green)** and **Identity (Purple)** indicates "clean" institutional growth.
+* **Efficiency Signal:** If Network Load (USD) rises but XRP Burn remains flat, the ledger is operating at maximum efficiency.
+* **MSTR Correlation:** Use the 06:00 AM SGT daily rollover to assess how ledger activity aligns with Bitcoin/MSTR "Max Pain" options pricing for the upcoming session.
