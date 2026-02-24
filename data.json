@@ -14,15 +14,15 @@
     },
     {
         "date": "2026-02-24",
-        "last_updated": "2026-02-24 19:42:34",
-        "burn_xrp": 356,
-        "load_usd_m": 1662,
-        "transactions": 0.95,
+        "last_updated": "2026-02-24 21:13:16",
+        "burn_xrp": 394,
+        "load_usd_m": 1838,
+        "transactions": 1.05,
         "categories": {
-            "settlement": 1.03,
-            "identity": 0.32,
-            "defi": 0.24,
-            "acct_mgmt": 0.09
+            "settlement": 1.14,
+            "identity": 0.35,
+            "defi": 0.26,
+            "acct_mgmt": 0.1
         }
     }
 ]
