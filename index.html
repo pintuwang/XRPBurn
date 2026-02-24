@@ -44,6 +44,14 @@
         let loadChartInstance = null;
         let txChartInstance = null;
 
+        const colors = {
+            settlement: '#2ca02c',
+            identity: '#9467bd',
+            defi: '#ff7f0e',
+            acct_mgmt: '#7f7f7f',
+            pending: '#a5c8ed' // Light Blue for "In Progress"
+        };
+
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
@@ -101,7 +109,7 @@
                     monthly[month].load += d.load_usd_m;
                     monthly[month].tx += d.transactions;
                     monthly[month].count++;
-                    Object.keys(d.categories).forEach(cat => { monthly[month].cats[cat] += d.categories[cat]; });
+                    Object.keys(d.categories).forEach(cat => { monthly[month].cats[cat] += d.categories[cat] || 0; });
                 });
                 displayData = Object.keys(monthly).map(m => ({
                     date: m, 
@@ -116,22 +124,30 @@
                 }));
             }
 
-            const colors = {
-                settlement: '#2ca02c',
-                identity: '#9467bd',
-                defi: '#ff7f0e',
-                acct_mgmt: '#7f7f7f'
-            };
+            const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
+
+            // --- 1. LOAD CHART DATASETS ---
+            const loadDatasets = catKeys.map(cat => ({
+                label: cat.charAt(0).toUpperCase() + cat.slice(1),
+                data: displayData.map(d => (d.categories && Object.keys(d.categories).length > 0) ? (d.categories[cat] || 0) : 0),
+                backgroundColor: colors[cat],
+                stack: 'Stack 0'
+            }));
+
+            // Add "Pending" load for days with empty categories
+            loadDatasets.push({
+                label: 'In Progress (Awaiting Breakdown)',
+                data: displayData.map(d => (!d.categories || Object.keys(d.categories).length === 0) ? d.load_usd_m : 0),
+                backgroundColor: colors.pending,
+                stack: 'Stack 0'
+            });
 
             loadChartInstance = new Chart(loadCtx, {
                 type: 'bar',
                 data: {
                     labels: displayData.map(d => d.date),
                     datasets: [
-                        { label: 'Settlement', data: displayData.map(d => d.categories.settlement), backgroundColor: colors.settlement, stack: 'Stack 0' },
-                        { label: 'Identity', data: displayData.map(d => d.categories.identity), backgroundColor: colors.identity, stack: 'Stack 0' },
-                        { label: 'DeFi', data: displayData.map(d => d.categories.defi), backgroundColor: colors.defi, stack: 'Stack 0' },
-                        { label: 'Account Mgmt', data: displayData.map(d => d.categories.acct_mgmt), backgroundColor: colors.acct_mgmt, stack: 'Stack 0' },
+                        ...loadDatasets,
                         { label: 'Actual XRP Burn', data: displayData.map(d => d.burn_xrp), borderColor: 'red', type: 'line', yAxisID: 'y1', tension: 0.1 }
                     ]
                 },
@@ -147,16 +163,27 @@
                 plugins: [weekendDotsPlugin]
             });
 
+            // --- 2. TRANSACTION CHART DATASETS ---
+            const txDatasets = catKeys.map(cat => ({
+                label: cat.charAt(0).toUpperCase() + cat.slice(1),
+                data: displayData.map(d => (d.categories && Object.keys(d.categories).length > 0) ? (d.categories[cat] || 0) : 0),
+                backgroundColor: colors[cat],
+                stack: 'Stack 0'
+            }));
+
+            // Add "Pending" transactions for days with empty categories
+            txDatasets.push({
+                label: 'In Progress (Awaiting Breakdown)',
+                data: displayData.map(d => (!d.categories || Object.keys(d.categories).length === 0) ? d.transactions : 0),
+                backgroundColor: colors.pending,
+                stack: 'Stack 0'
+            });
+
             txChartInstance = new Chart(txCtx, {
                 type: 'bar',
                 data: {
                     labels: displayData.map(d => d.date),
-                    datasets: [
-                        { label: 'Settlement', data: displayData.map(d => d.categories.settlement), backgroundColor: colors.settlement, stack: 'Stack 0' },
-                        { label: 'Identity', data: displayData.map(d => d.categories.identity), backgroundColor: colors.identity, stack: 'Stack 0' },
-                        { label: 'DeFi', data: displayData.map(d => d.categories.defi), backgroundColor: colors.defi, stack: 'Stack 0' },
-                        { label: 'Account Mgmt', data: displayData.map(d => d.categories.acct_mgmt), backgroundColor: colors.acct_mgmt, stack: 'Stack 0' }
-                    ]
+                    datasets: txDatasets
                 },
                 options: {
                     responsive: true,
@@ -170,9 +197,31 @@
             });
         }
 
-        function triggerUpdate() {
-            alert("Opening GitHub Actions to run manual update...");
-            window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
+        async function triggerUpdate() {
+            const token = prompt("Enter GitHub Token to trigger update (or cancel to just view Actions):");
+            if (!token) {
+                window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
+                return;
+            }
+
+            try {
+                const response = await fetch(`https://api.github.com/repos/pintuwang/xrpburn/actions/workflows/daily_update.yml/dispatches`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                    },
+                    body: JSON.stringify({ ref: 'main' })
+                });
+
+                if (response.ok) {
+                    alert("Success! The update has been triggered. Refresh in 1 minute.");
+                } else {
+                    alert("Error: Check your token permissions.");
+                }
+            } catch (err) {
+                alert("Failed to connect to GitHub API.");
+            }
         }
 
         window.onload = loadData;
