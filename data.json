@@ -1,22 +1,22 @@
 [
     {
+        "date": "2026-02-23",
+        "last_updated": "2026-02-23 22:32:16",
+        "burn_xrp": 442,
+        "load_usd_m": 2120,
+        "transactions": 1.1,
+        "tx_categories": { "settlement": 0.77, "identity": 0.165, "defi": 0.11, "acct_mgmt": 0.055 },
+        "load_categories": { "settlement": 1908.0, "identity": 42.4, "defi": 148.4, "acct_mgmt": 21.2 },
+        "is_fallback": false
+    },
+    {
         "date": "2026-02-24",
-        "last_updated": "2026-02-24 23:22:50",
+        "last_updated": "2026-02-24 23:15:42",
         "burn_xrp": 440,
         "load_usd_m": 2814.0,
         "transactions": 1.2,
-        "tx_categories": {
-            "settlement": 0.84,
-            "identity": 0.18,
-            "defi": 0.12,
-            "acct_mgmt": 0.06
-        },
-        "load_categories": {
-            "settlement": 2532.6,
-            "identity": 56.28,
-            "defi": 196.98000000000002,
-            "acct_mgmt": 28.14
-        },
-        "is_fallback": true
+        "tx_categories": {},
+        "load_categories": {},
+        "is_fallback": false
     }
 ]
