@@ -21,9 +21,9 @@
     },
     {
         "date": "2026-02-24",
-        "last_updated": "2026-02-24 23:23:48",
+        "last_updated": "2026-02-24 23:26:38",
         "burn_xrp": 440,
-        "load_usd_m": 2814.0,
+        "load_usd_m": 2835.0,
         "transactions": 1.2,
         "tx_categories": {
             "settlement": 0.84,
@@ -32,10 +32,10 @@
             "acct_mgmt": 0.06
         },
         "load_categories": {
-            "settlement": 2532.6,
-            "identity": 56.28,
-            "defi": 196.98000000000002,
-            "acct_mgmt": 28.14
+            "settlement": 2551.5,
+            "identity": 56.7,
+            "defi": 198.45000000000002,
+            "acct_mgmt": 28.35
         },
         "is_fallback": true
     }
