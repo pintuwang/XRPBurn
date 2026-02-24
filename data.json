@@ -14,10 +14,10 @@
     },
     {
         "date": "2026-02-24",
-        "last_updated": "2026-02-24 22:59:04",
-        "burn_xrp": 0,
-        "load_usd_m": 0.0,
-        "transactions": 0.0,
+        "last_updated": "2026-02-24 23:03:48",
+        "burn_xrp": 440,
+        "load_usd_m": 2814.0,
+        "transactions": 1.2,
         "categories": {}
     }
 ]
