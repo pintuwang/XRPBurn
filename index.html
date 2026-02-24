@@ -52,16 +52,18 @@
             pending: '#a5c8ed'
         };
 
+
         // PLUGIN: Draw Balloon Icons on Simulated Data
         const fallbackIconPlugin = {
             id: 'fallbackIcon',
             afterDraw: (chart) => {
                 const { ctx, scales: { x, y } } = chart;
                 chart.data.labels.forEach((label, i) => {
+                    // Check if this specific date entry is a fallback
                     const entry = rawData.find(d => d.date === label);
                     if (entry && entry.is_fallback) {
                         const xPos = x.getPixelForValue(label);
-                        const yPos = y.getPixelForValue(chart.data.datasets[0].data[i]) - 20;
+                        // Place at the top of the chart area
                         ctx.font = '16px serif';
                         ctx.textAlign = 'center';
                         ctx.fillText('🎈', xPos, y.top + 20);
@@ -69,7 +71,7 @@
                 });
             }
         };
-
+        
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
