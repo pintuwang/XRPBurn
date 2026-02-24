@@ -1,7 +1,7 @@
 [
     {
         "date": "2026-02-24",
-        "last_updated": "2026-02-24 23:15:42",
+        "last_updated": "2026-02-24 23:21:15",
         "burn_xrp": 440,
         "load_usd_m": 2814.0,
         "transactions": 1.2,
@@ -14,7 +14,7 @@
         "load_categories": {
             "settlement": 2532.6,
             "identity": 56.28,
-            "defi": 196.98,
+            "defi": 196.98000000000002,
             "acct_mgmt": 28.14
         },
         "is_fallback": true
