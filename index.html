@@ -36,7 +36,7 @@
     </div>
 
     <div class="dot-legend">
-        🔵 Saturday | 🔴 Sunday
+        🔵 Saturday | 🔴 Sunday | 🎈 Simulated Data
     </div>
 
     <script>
@@ -49,14 +49,30 @@
             identity: '#9467bd',
             defi: '#ff7f0e',
             acct_mgmt: '#7f7f7f',
-            pending: '#a5c8ed' // Light Blue for "In Progress"
+            pending: '#a5c8ed'
+        };
+
+        // PLUGIN: Draw Balloon Icons on Simulated Data
+        const fallbackIconPlugin = {
+            id: 'fallbackIcon',
+            afterDraw: (chart) => {
+                const { ctx, scales: { x, y } } = chart;
+                chart.data.labels.forEach((label, i) => {
+                    const entry = rawData.find(d => d.date === label);
+                    if (entry && entry.is_fallback) {
+                        const xPos = x.getPixelForValue(label);
+                        const yPos = y.getPixelForValue(chart.data.datasets[0].data[i]) - 20;
+                        ctx.font = '16px serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('🎈', xPos, y.top + 20);
+                    }
+                });
+            }
         };
 
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
-                const isMonthly = document.getElementById('rollup-toggle').checked;
-                if (isMonthly) return;
                 const { ctx, scales: { x } } = chart;
                 chart.data.labels.forEach((label, i) => {
                     const date = new Date(label);
@@ -80,9 +96,7 @@
                     document.getElementById('last-update').innerText = lastEntry.last_updated || lastEntry.date;
                 }
                 renderCharts();
-            } catch (error) {
-                console.error("Error loading data:", error);
-            }
+            } catch (error) { console.error("Error loading data:", error); }
         }
 
         function renderCharts() {
@@ -94,134 +108,60 @@
             if (txChartInstance) txChartInstance.destroy();
 
             let displayData = rawData;
-
-            if (isMonthly) {
-                const monthly = {};
-                rawData.forEach(d => {
-                    const month = d.date.substring(0, 7);
-                    if (!monthly[month]) {
-                        monthly[month] = { 
-                            burn: 0, load: 0, tx: 0, count: 0, 
-                            cats: { settlement: 0, identity: 0, defi: 0, acct_mgmt: 0 } 
-                        };
-                    }
-                    monthly[month].burn += d.burn_xrp;
-                    monthly[month].load += d.load_usd_m;
-                    monthly[month].tx += d.transactions;
-                    monthly[month].count++;
-                    Object.keys(d.categories).forEach(cat => { monthly[month].cats[cat] += d.categories[cat] || 0; });
-                });
-                displayData = Object.keys(monthly).map(m => ({
-                    date: m, 
-                    burn_xrp: monthly[m].burn / monthly[m].count,
-                    transactions: monthly[m].tx / monthly[m].count,
-                    categories: {
-                        settlement: monthly[m].cats.settlement / monthly[m].count,
-                        identity: monthly[m].cats.identity / monthly[m].count,
-                        defi: monthly[m].cats.defi / monthly[m].count,
-                        acct_mgmt: monthly[m].cats.acct_mgmt / monthly[m].count
-                    }
-                }));
-            }
-
             const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
 
-            // --- 1. LOAD CHART DATASETS ---
+            // --- 1. LOAD CHART ---
             const loadDatasets = catKeys.map(cat => ({
                 label: cat.charAt(0).toUpperCase() + cat.slice(1),
-                data: displayData.map(d => (d.categories && Object.keys(d.categories).length > 0) ? (d.categories[cat] || 0) : 0),
-                backgroundColor: colors[cat],
-                stack: 'Stack 0'
+                data: displayData.map(d => (d.load_categories && Object.keys(d.load_categories).length > 0) ? (d.load_categories[cat] || 0) : 0),
+                backgroundColor: colors[cat], stack: 'Stack 0'
             }));
 
-            // Add "Pending" load for days with empty categories
             loadDatasets.push({
-                label: 'In Progress (Awaiting Breakdown)',
-                data: displayData.map(d => (!d.categories || Object.keys(d.categories).length === 0) ? d.load_usd_m : 0),
-                backgroundColor: colors.pending,
-                stack: 'Stack 0'
+                label: 'In Progress',
+                data: displayData.map(d => (!d.load_categories || Object.keys(d.load_categories).length === 0) ? d.load_usd_m : 0),
+                backgroundColor: colors.pending, stack: 'Stack 0'
             });
 
             loadChartInstance = new Chart(loadCtx, {
                 type: 'bar',
                 data: {
                     labels: displayData.map(d => d.date),
-                    datasets: [
-                        ...loadDatasets,
-                        { label: 'Actual XRP Burn', data: displayData.map(d => d.burn_xrp), borderColor: 'red', type: 'line', yAxisID: 'y1', tension: 0.1 }
-                    ]
+                    datasets: [...loadDatasets, { label: 'Actual XRP Burn', data: displayData.map(d => d.burn_xrp), borderColor: 'red', type: 'line', yAxisID: 'y1' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true },
-                        y: { stacked: true, title: { display: true, text: 'USD Load (Millions)' } },
-                        y1: { position: 'right', title: { display: true, text: 'XRP Burned' }, grid: { drawOnChartArea: false } }
-                    }
-                },
-                plugins: [weekendDotsPlugin]
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true }, y1: { position: 'right', grid: { drawOnChartArea: false } } } },
+                plugins: [weekendDotsPlugin, fallbackIconPlugin]
             });
 
-            // --- 2. TRANSACTION CHART DATASETS ---
+            // --- 2. TRANSACTION CHART ---
             const txDatasets = catKeys.map(cat => ({
                 label: cat.charAt(0).toUpperCase() + cat.slice(1),
-                data: displayData.map(d => (d.categories && Object.keys(d.categories).length > 0) ? (d.categories[cat] || 0) : 0),
-                backgroundColor: colors[cat],
-                stack: 'Stack 0'
+                data: displayData.map(d => (d.tx_categories && Object.keys(d.tx_categories).length > 0) ? (d.tx_categories[cat] || 0) : 0),
+                backgroundColor: colors[cat], stack: 'Stack 0'
             }));
 
-            // Add "Pending" transactions for days with empty categories
             txDatasets.push({
-                label: 'In Progress (Awaiting Breakdown)',
-                data: displayData.map(d => (!d.categories || Object.keys(d.categories).length === 0) ? d.transactions : 0),
-                backgroundColor: colors.pending,
-                stack: 'Stack 0'
+                label: 'In Progress',
+                data: displayData.map(d => (!d.tx_categories || Object.keys(d.tx_categories).length === 0) ? d.transactions : 0),
+                backgroundColor: colors.pending, stack: 'Stack 0'
             });
 
             txChartInstance = new Chart(txCtx, {
                 type: 'bar',
-                data: {
-                    labels: displayData.map(d => d.date),
-                    datasets: txDatasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true },
-                        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Transactions (Millions)' } }
-                    }
-                },
-                plugins: [weekendDotsPlugin]
+                data: { labels: displayData.map(d => d.date), datasets: txDatasets },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } },
+                plugins: [weekendDotsPlugin, fallbackIconPlugin]
             });
         }
 
         async function triggerUpdate() {
-            const token = prompt("Enter GitHub Token to trigger update (or cancel to just view Actions):");
-            if (!token) {
-                window.location.href = "https://github.com/pintuwang/xrpburn/actions/workflows/daily_update.yml";
-                return;
-            }
-
-            try {
-                const response = await fetch(`https://api.github.com/repos/pintuwang/xrpburn/actions/workflows/daily_update.yml/dispatches`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                    },
-                    body: JSON.stringify({ ref: 'main' })
-                });
-
-                if (response.ok) {
-                    alert("Success! The update has been triggered. Refresh in 1 minute.");
-                } else {
-                    alert("Error: Check your token permissions.");
-                }
-            } catch (err) {
-                alert("Failed to connect to GitHub API.");
-            }
+            const token = prompt("Enter GitHub Token:");
+            if (!token) return;
+            const response = await fetch(`https://api.github.com/repos/pintuwang/xrpburn/actions/workflows/daily_update.yml/dispatches`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
+                body: JSON.stringify({ ref: 'main' })
+            });
+            if (response.ok) alert("Triggered!");
         }
 
         window.onload = loadData;
