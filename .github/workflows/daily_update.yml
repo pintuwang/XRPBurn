@@ -1,11 +1,11 @@
 name: Daily XRPBurn Update
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 22 * * *'  # 6:00 AM Singapore Time (SGT = UTC+8)
+    # This runs at the top of every hour (00:00, 01:00, etc.)
+    - cron: '0 * * * *'
 
 jobs:
   build:
