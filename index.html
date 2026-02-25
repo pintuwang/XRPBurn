@@ -143,25 +143,53 @@
         };
 
         // ── Plugin: partial day hatching ──────────────────────────────────────
+        // Draws diagonal lines clipped to the actual stacked bar area only.
         const partialHatchPlugin = {
             id: 'partialHatch',
-            afterDraw: chart => {
+            afterDatasetsDraw: chart => {
                 const { ctx, scales: { x, y } } = chart;
                 if (!x || !y) return;
-                chart.data.labels.forEach(label => {
+
+                chart.data.labels.forEach((label, labelIdx) => {
                     const e = rawData.find(d => d.date === label);
                     if (!e || !e.is_partial) return;
-                    const xPos     = x.getPixelForValue(label);
-                    const barWidth = x.width / chart.data.labels.length * 0.6;
-                    const xLeft    = xPos - barWidth / 2;
-                    const xRight   = xPos + barWidth / 2;
+
+                    // Find the tallest bar top for this label across all datasets
+                    let barTop    = y.bottom;
+                    let barBottom = y.bottom;
+                    let barLeft   = null;
+                    let barRight  = null;
+
+                    chart.data.datasets.forEach((ds, dsIdx) => {
+                        const meta = chart.getDatasetMeta(dsIdx);
+                        if (!meta.visible) return;
+                        const bar = meta.data[labelIdx];
+                        if (!bar) return;
+                        const bnd = bar.getProps(['x','y','width','height'], true);
+                        if (bnd.y < barTop) barTop = bnd.y;
+                        if (barLeft === null) {
+                            barLeft  = bnd.x - bnd.width / 2;
+                            barRight = bnd.x + bnd.width / 2;
+                        }
+                    });
+
+                    if (barLeft === null || barTop >= barBottom) return;
+
                     ctx.save();
-                    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-                    ctx.lineWidth   = 1.5;
-                    for (let yy = y.top; yy < y.bottom; yy += 8) {
+                    // Clip to bar rectangle only
+                    ctx.beginPath();
+                    ctx.rect(barLeft, barTop, barRight - barLeft, barBottom - barTop);
+                    ctx.clip();
+
+                    ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+                    ctx.lineWidth   = 1.2;
+                    const h = barBottom - barTop;
+                    const w = barRight  - barLeft;
+                    // Diagonal lines at 45°
+                    for (let offset = -h; offset < w + h; offset += 9) {
                         ctx.beginPath();
-                        ctx.moveTo(xLeft,  yy);
-                        ctx.lineTo(xRight, yy + 8);
+                        ctx.moveTo(barLeft  + offset,         barTop);
+                        ctx.lineTo(barLeft  + offset + h,     barBottom);
                         ctx.stroke();
                     }
                     ctx.restore();
