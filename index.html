@@ -6,7 +6,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
+        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .chart-wrapper { background: white; padding: 20px; border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .dot-legend { font-size: 0.8em; margin-top: 10px; margin-bottom: 20px; }
@@ -14,16 +14,25 @@
             color: white; border: none; border-radius: 4px; }
         canvas { width: 100% !important; }
         #loadChart { height: 380px !important; }
-        #burnChart { height: 180px !important; }
+        #burnChart { height: 160px !important; }
         #txChart   { height: 380px !important; }
         .data-warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;
             padding: 8px 14px; font-size: 0.82em; color: #856404;
             display: none; margin-bottom: 16px; }
-        .chart-subtitle { font-size: 0.8em; color: #666; margin: -12px 0 8px 0; }
+        .chart-subtitle { font-size: 0.78em; color: #666; margin: -10px 0 10px 0; }
+        .partial-badge {
+            display: inline-block; background: #e8f4fd; border: 1px solid #90caf9;
+            color: #1565c0; border-radius: 12px; padding: 2px 10px;
+            font-size: 0.75em; margin-left: 10px; vertical-align: middle;
+        }
     </style>
 </head>
 <body>
-    <h1>XRPBurn Analysis Daily</h1>
+    <h1>XRPBurn Analysis Daily
+        <span id="partial-badge" class="partial-badge" style="display:none">
+            ⏱ Today partial — as of <span id="partial-time"></span> SGT
+        </span>
+    </h1>
     <p>Last updated: <span id="last-update">-</span> (SGT)</p>
 
     <div id="data-warning" class="data-warning"></div>
@@ -31,32 +40,44 @@
     <div class="controls">
         <button onclick="triggerUpdate()">Update Now</button>
         <label>
-            <input type="checkbox" id="rollup-toggle" onchange="loadData()"> Roll up to Monthly
+            <input type="checkbox" id="rollup-toggle" onchange="loadData()">
+            Roll up to Monthly
+        </label>
+        <label style="font-size:0.85em;color:#555">
+            <input type="checkbox" id="partial-toggle" checked onchange="renderCharts()">
+            Show partial days
         </label>
     </div>
 
-    <!-- LOAD CHART -->
     <div class="chart-wrapper">
         <h3>Network Load — Categorized USD (Millions)</h3>
-        <p class="chart-subtitle">Estimated daily XRP payment volume × price, capped at 10M XRP/tx to exclude exchange internal transfers</p>
+        <p class="chart-subtitle">
+            CoinGecko rolling 24h exchange volume, split by on-chain tx category proportions.
+            Semi-transparent bars = partial day (run before 23:30 SGT).
+        </p>
         <canvas id="loadChart"></canvas>
     </div>
 
-    <!-- BURN CHART — separate panel so it's always visible -->
     <div class="chart-wrapper">
         <h3>XRP Burned per Day</h3>
-        <p class="chart-subtitle">Daily decrease in total circulating supply (coin delta method). ~500–600 XRP/day is normal at current tx volumes.</p>
+        <p class="chart-subtitle">
+            Coin delta: open_coins (00:00 SGT) − current_coins. Partial days show burn so far today.
+        </p>
         <canvas id="burnChart"></canvas>
     </div>
 
-    <!-- TX CHART -->
     <div class="chart-wrapper">
         <h3>Transaction Breakdown (Millions)</h3>
+        <p class="chart-subtitle">
+            Estimated daily count from fee-drop proxy, split by sampled category proportions.
+        </p>
         <canvas id="txChart"></canvas>
     </div>
 
     <div class="dot-legend">
-        🔵 Saturday | 🔴 Sunday | 🎈 Simulated / XRPL Unreachable
+        🔵 Saturday &nbsp;|&nbsp; 🔴 Sunday &nbsp;|&nbsp;
+        🎈 Simulated (XRPL unreachable) &nbsp;|&nbsp;
+        ░ Semi-transparent = partial day
     </div>
 
     <script>
@@ -65,47 +86,13 @@
         let burnChartInst = null;
         let txChartInst   = null;
 
-        const colors = {
+        const COLORS = {
             settlement: '#2ca02c',
             identity:   '#9467bd',
             defi:       '#ff7f0e',
             acct_mgmt:  '#7f7f7f',
-            pending:    '#a5c8ed'
-        };
-
-        // ── Plugins ──────────────────────────────────────────────────────────
-
-        const fallbackIconPlugin = {
-            id: 'fallbackIcon',
-            afterDraw: (chart) => {
-                const { ctx, scales: { x, y } } = chart;
-                if (!x || !y) return;
-                chart.data.labels.forEach((label) => {
-                    const entry = rawData.find(d => d.date === label);
-                    if (entry && entry.is_fallback) {
-                        ctx.font = '14px serif';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('🎈', x.getPixelForValue(label), y.top + 16);
-                    }
-                });
-            }
-        };
-
-        const weekendDotsPlugin = {
-            id: 'weekendDots',
-            afterDraw: (chart) => {
-                const { ctx, scales: { x } } = chart;
-                if (!x) return;
-                chart.data.labels.forEach((label) => {
-                    const day = new Date(label).getDay();
-                    if (day === 6 || day === 0) {
-                        ctx.fillStyle = day === 6 ? '#1f77b4' : '#d62728';
-                        ctx.beginPath();
-                        ctx.arc(x.getPixelForValue(label), x.bottom + 14, 4, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                });
-            }
+            pending:    '#a5c8ed',
+            burn:       '#d62728',
         };
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -116,18 +103,91 @@
                    Object.values(cats).some(v => v > 0);
         }
 
-        function catLabel(key) {
-            return { settlement: 'Settlement', identity: 'Identity',
-                     defi: 'DeFi', acct_mgmt: 'Acct Mgmt' }[key] || key;
+        function catLabel(k) {
+            return { settlement:'Settlement', identity:'Identity',
+                     defi:'DeFi', acct_mgmt:'Acct Mgmt' }[k] || k;
         }
 
         function fmtUSD(v) {
             if (v == null) return '—';
-            if (v >= 1000) return '$' + (v/1000).toFixed(2) + 'B';
-            return '$' + v.toFixed(0) + 'M';
+            return v >= 1000 ? '$'+(v/1000).toFixed(2)+'B' : '$'+v.toFixed(0)+'M';
         }
 
-        // ── Data loading ──────────────────────────────────────────────────────
+        /** Return bar opacity: partial days = 0.45, complete = 1.0 */
+        function barAlpha(entry) {
+            return (entry && entry.is_partial) ? 0.45 : 1.0;
+        }
+
+        /** Apply alpha to a hex color */
+        function withAlpha(hex, alpha) {
+            const r = parseInt(hex.slice(1,3),16);
+            const g = parseInt(hex.slice(3,5),16);
+            const b = parseInt(hex.slice(5,7),16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
+        // ── Plugin: fallback balloons ─────────────────────────────────────────
+        const fallbackIconPlugin = {
+            id: 'fallbackIcon',
+            afterDraw: chart => {
+                const { ctx, scales: { x, y } } = chart;
+                if (!x || !y) return;
+                chart.data.labels.forEach(label => {
+                    const e = rawData.find(d => d.date === label);
+                    if (e && e.is_fallback) {
+                        ctx.font = '14px serif'; ctx.textAlign = 'center';
+                        ctx.fillText('🎈', x.getPixelForValue(label), y.top + 16);
+                    }
+                });
+            }
+        };
+
+        // ── Plugin: partial day hatching ──────────────────────────────────────
+        const partialHatchPlugin = {
+            id: 'partialHatch',
+            afterDraw: chart => {
+                const { ctx, scales: { x, y } } = chart;
+                if (!x || !y) return;
+                chart.data.labels.forEach(label => {
+                    const e = rawData.find(d => d.date === label);
+                    if (!e || !e.is_partial) return;
+                    const xPos     = x.getPixelForValue(label);
+                    const barWidth = x.width / chart.data.labels.length * 0.6;
+                    const xLeft    = xPos - barWidth / 2;
+                    const xRight   = xPos + barWidth / 2;
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+                    ctx.lineWidth   = 1.5;
+                    for (let yy = y.top; yy < y.bottom; yy += 8) {
+                        ctx.beginPath();
+                        ctx.moveTo(xLeft,  yy);
+                        ctx.lineTo(xRight, yy + 8);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                });
+            }
+        };
+
+        // ── Plugin: weekend dots ──────────────────────────────────────────────
+        const weekendDotsPlugin = {
+            id: 'weekendDots',
+            afterDraw: chart => {
+                const { ctx, scales: { x } } = chart;
+                if (!x) return;
+                chart.data.labels.forEach(label => {
+                    const day = new Date(label).getDay();
+                    if (day === 6 || day === 0) {
+                        ctx.fillStyle = day === 6 ? '#1f77b4' : '#d62728';
+                        ctx.beginPath();
+                        ctx.arc(x.getPixelForValue(label), x.bottom + 14, 4, 0, 2*Math.PI);
+                        ctx.fill();
+                    }
+                });
+            }
+        };
+
+        // ── Load data ─────────────────────────────────────────────────────────
 
         async function loadData() {
             try {
@@ -137,6 +197,14 @@
                     const last = rawData[rawData.length - 1];
                     document.getElementById('last-update').innerText =
                         last.last_updated || last.date;
+
+                    // Show partial badge if today is partial
+                    if (last.is_partial && last.partial_as_of) {
+                        document.getElementById('partial-badge').style.display = 'inline-block';
+                        document.getElementById('partial-time').innerText = last.partial_as_of;
+                    } else {
+                        document.getElementById('partial-badge').style.display = 'none';
+                    }
                 }
                 checkDataWarnings();
                 renderCharts();
@@ -149,12 +217,12 @@
         function checkDataWarnings() {
             const el  = document.getElementById('data-warning');
             const sim = rawData.filter(d => d.is_fallback === true);
-            const pnd = rawData.filter(d => !d.is_fallback && !hasCategories(d.tx_categories));
+            const pnd = rawData.filter(d => !d.is_fallback && !hasCategories(d.tx_categories) && !d.is_partial);
             const msgs = [];
             if (sim.length)
                 msgs.push(`🎈 <strong>${sim.length} day(s) used fallback data</strong> (XRPL unreachable): <em>${sim.map(d=>d.date).join(', ')}</em>`);
             if (pnd.length)
-                msgs.push(`⏳ <strong>${pnd.length} day(s) awaiting category data</strong> from next run: <em>${pnd.map(d=>d.date).join(', ')}</em>`);
+                msgs.push(`⏳ <strong>${pnd.length} day(s) missing category data</strong> (completed days with no real breakdown): <em>${pnd.map(d=>d.date).join(', ')}</em>`);
             el.style.display = msgs.length ? 'block' : 'none';
             el.innerHTML = msgs.join('<br>');
         }
@@ -162,27 +230,38 @@
         // ── Chart rendering ───────────────────────────────────────────────────
 
         function renderCharts() {
-            const isMonthly  = document.getElementById('rollup-toggle').checked;
-            const displayData = isMonthly ? rollUpMonthly(rawData) : rawData;
-            const catKeys     = ['settlement', 'identity', 'defi', 'acct_mgmt'];
-            const labels      = displayData.map(d => d.date);
+            const isMonthly     = document.getElementById('rollup-toggle').checked;
+            const showPartial   = document.getElementById('partial-toggle').checked;
+            let   displayData   = isMonthly ? rollUpMonthly(rawData) : rawData;
+
+            // Filter out partial days if toggle is off
+            if (!showPartial) {
+                displayData = displayData.filter(d => !d.is_partial);
+            }
+
+            const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
+            const labels  = displayData.map(d => d.date);
 
             if (loadChartInst) loadChartInst.destroy();
             if (burnChartInst) burnChartInst.destroy();
             if (txChartInst)   txChartInst.destroy();
 
-            // ── 1. LOAD CHART (stacked bars only — no burn overlay) ───────────
+            // ── LOAD CHART ────────────────────────────────────────────────────
             const loadDatasets = catKeys.map(cat => ({
                 label: catLabel(cat),
                 data: displayData.map(d =>
                     hasCategories(d.load_categories) ? (d.load_categories[cat] || 0) : 0),
-                backgroundColor: colors[cat], stack: 'Stack 0'
+                // Per-bar alpha: partial = semi-transparent
+                backgroundColor: displayData.map(d =>
+                    withAlpha(COLORS[cat], barAlpha(d))),
+                stack: 'Stack 0'
             }));
             loadDatasets.push({
                 label: 'In Progress',
                 data: displayData.map(d =>
                     !hasCategories(d.load_categories) ? (d.load_usd_m ?? null) : 0),
-                backgroundColor: colors.pending, stack: 'Stack 0'
+                backgroundColor: displayData.map(d => withAlpha(COLORS.pending, barAlpha(d))),
+                stack: 'Stack 0'
             });
 
             loadChartInst = new Chart(
@@ -191,48 +270,50 @@
                 data: { labels, datasets: loadDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        tooltip: { callbacks: {
-                            label: ctx => ctx.raw == null ? null
-                                : `${ctx.dataset.label}: ${fmtUSD(ctx.raw)}`
-                        }}
-                    },
+                    plugins: { tooltip: { callbacks: { label: ctx => {
+                        if (ctx.raw == null || ctx.raw === 0) return null;
+                        const e = displayData[ctx.dataIndex];
+                        const suffix = e && e.is_partial
+                            ? ` (partial — as of ${e.partial_as_of} SGT)` : '';
+                        return `${ctx.dataset.label}: ${fmtUSD(ctx.raw)}${suffix}`;
+                    }}}},
                     scales: {
                         x: { stacked: true },
                         y: {
                             stacked: true,
                             title: { display: true, text: 'USD Millions' },
-                            ticks: {
-                                callback: v => v >= 1000 ? '$'+(v/1000).toFixed(0)+'B' : '$'+v+'M'
-                            }
+                            ticks: { callback: v =>
+                                v >= 1000 ? '$'+(v/1000).toFixed(0)+'B' : '$'+v+'M' }
                         }
                     }
                 },
-                plugins: [weekendDotsPlugin, fallbackIconPlugin]
+                plugins: [weekendDotsPlugin, fallbackIconPlugin, partialHatchPlugin]
             });
 
-            // ── 2. BURN CHART (standalone bar — always readable) ──────────────
+            // ── BURN CHART ────────────────────────────────────────────────────
             burnChartInst = new Chart(
                 document.getElementById('burnChart').getContext('2d'), {
                 type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'XRP Burned',
-                        data: displayData.map(d => d.burn_xrp ?? null),
-                        backgroundColor: 'rgba(214,39,40,0.7)',
-                        borderColor: '#d62728',
-                        borderWidth: 1
-                    }]
-                },
+                data: { labels, datasets: [{
+                    label: 'XRP Burned',
+                    data: displayData.map(d => d.burn_xrp ?? null),
+                    backgroundColor: displayData.map(d =>
+                        withAlpha(COLORS.burn, barAlpha(d))),
+                    borderColor: displayData.map(d =>
+                        withAlpha('#8b0000', barAlpha(d))),
+                    borderWidth: 1
+                }]},
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: {
-                            label: ctx => ctx.raw == null ? null
-                                : `Burned: ${ctx.raw.toFixed(2)} XRP`
-                        }}
+                        tooltip: { callbacks: { label: ctx => {
+                            if (ctx.raw == null) return null;
+                            const e = displayData[ctx.dataIndex];
+                            const suffix = e && e.is_partial
+                                ? ` (partial — since 00:00, as of ${e.partial_as_of} SGT)` : ' (full day)';
+                            return `Burned: ${ctx.raw.toFixed(4)} XRP${suffix}`;
+                        }}}
                     },
                     scales: {
                         x: { grid: { display: false } },
@@ -243,21 +324,25 @@
                         }
                     }
                 },
-                plugins: [weekendDotsPlugin]
+                plugins: [weekendDotsPlugin, partialHatchPlugin]
             });
 
-            // ── 3. TX CHART ───────────────────────────────────────────────────
+            // ── TX CHART ──────────────────────────────────────────────────────
             const txDatasets = catKeys.map(cat => ({
                 label: catLabel(cat),
                 data: displayData.map(d =>
                     hasCategories(d.tx_categories) ? (d.tx_categories[cat] || 0) : 0),
-                backgroundColor: colors[cat], stack: 'Stack 0'
+                backgroundColor: displayData.map(d =>
+                    withAlpha(COLORS[cat], barAlpha(d))),
+                stack: 'Stack 0'
             }));
             txDatasets.push({
                 label: 'In Progress',
                 data: displayData.map(d =>
                     !hasCategories(d.tx_categories) ? (d.transactions ?? null) : 0),
-                backgroundColor: colors.pending, stack: 'Stack 0'
+                backgroundColor: displayData.map(d =>
+                    withAlpha(COLORS.pending, barAlpha(d))),
+                stack: 'Stack 0'
             });
 
             txChartInst = new Chart(
@@ -266,19 +351,20 @@
                 data: { labels, datasets: txDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { tooltip: { callbacks: {
-                        label: ctx => !ctx.raw ? null
-                            : `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs`
-                    }}},
+                    plugins: { tooltip: { callbacks: { label: ctx => {
+                        if (!ctx.raw) return null;
+                        const e = displayData[ctx.dataIndex];
+                        const suffix = e && e.is_partial
+                            ? ` (partial — as of ${e.partial_as_of} SGT)` : '';
+                        return `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs${suffix}`;
+                    }}}},
                     scales: {
                         x: { stacked: true },
-                        y: {
-                            stacked: true,
-                            title: { display: true, text: 'Transactions (Millions)' }
-                        }
+                        y: { stacked: true,
+                             title: { display: true, text: 'Transactions (Millions)' }}
                     }
                 },
-                plugins: [weekendDotsPlugin, fallbackIconPlugin]
+                plugins: [weekendDotsPlugin, fallbackIconPlugin, partialHatchPlugin]
             });
         }
 
@@ -288,26 +374,33 @@
             const months = {};
             data.forEach(d => {
                 const m = d.date.slice(0, 7);
-                if (!months[m]) months[m] = { entries: [], date: m + '-01', is_fallback: false };
+                if (!months[m]) months[m] = {
+                    entries: [], date: m + '-01',
+                    is_fallback: false, is_partial: false
+                };
                 months[m].entries.push(d);
                 if (d.is_fallback) months[m].is_fallback = true;
+                if (d.is_partial)  months[m].is_partial  = true;
             });
-            return Object.values(months).map(({ entries, date, is_fallback }) => {
+            return Object.values(months).map(({ entries, date, is_fallback, is_partial }) => {
                 const avg = key => {
                     const vals = entries.map(e => e[key]).filter(v => v != null);
-                    return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+                    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
                 };
                 const sumCat = (field, cat) =>
-                    entries.reduce((s, e) => s + ((e[field] || {})[cat] || 0), 0);
-                const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
+                    entries.reduce((s,e) => s + ((e[field]||{})[cat]||0), 0);
+                const catKeys = ['settlement','identity','defi','acct_mgmt'];
                 const hasCat  = entries.some(e => hasCategories(e.tx_categories));
+                const lastPartial = entries.filter(e=>e.is_partial).pop();
                 return {
-                    date, last_updated: date, is_fallback,
-                    burn_xrp:    avg('burn_xrp'),
-                    load_usd_m:  avg('load_usd_m'),
-                    transactions: avg('transactions'),
-                    tx_categories:   hasCat ? Object.fromEntries(catKeys.map(k=>[k, sumCat('tx_categories',k)]))  : {},
-                    load_categories: hasCat ? Object.fromEntries(catKeys.map(k=>[k, sumCat('load_categories',k)])) : {},
+                    date, is_fallback, is_partial,
+                    partial_as_of: lastPartial?.partial_as_of || null,
+                    last_updated:  date,
+                    burn_xrp:      avg('burn_xrp'),
+                    load_usd_m:    avg('load_usd_m'),
+                    transactions:  avg('transactions'),
+                    tx_categories:   hasCat ? Object.fromEntries(catKeys.map(k=>[k,sumCat('tx_categories',k)]))  : {},
+                    load_categories: hasCat ? Object.fromEntries(catKeys.map(k=>[k,sumCat('load_categories',k)])) : {},
                 };
             });
         }
