@@ -279,8 +279,13 @@ def get_category_proportions(current_ledger_seq):
         return None, ledgers_ok
 
     proportions = {k: v / total for k, v in tx_counts.items()}
+    proportions["_total"] = total   # raw count for tx scaling (popped by caller)
     print(f"  {ledgers_ok} ledgers | {total} txs | " +
-          " | ".join(f"{k}={v*100:.1f}%" for k, v in proportions.items()))
+          " | ".join(f"{k}={v*100:.1f}%" for k, v in tx_counts.items()
+                     if k != "_total") + 
+          f"  (proportions: " + 
+          " | ".join(f"{k}={v*100:.1f}%" for k, v in proportions.items()
+                     if k != "_total") + ")")
     return proportions, ledgers_ok
 
 
@@ -324,14 +329,18 @@ def get_real_metrics(midnight_utc, cached_midnight_coins=None):
     # ── Load ──────────────────────────────────────────────────────────────
     load_usd_m = round(volume_24h_usd / 1_000_000, 2) if volume_24h_usd else None
 
-    # ── Tx count (fee-drop proxy — used only for proportional split) ───────
-    # Note: tx count estimate is rough; proportions are what matters here.
-    total_tx_m = 1.2   # XRPL daily average fallback if sample unavailable
-    if ledgers_ok > 0:
-        # Estimate: avg ~90-110 tx/ledger × 25,000 ledgers/day
-        # We'll use 100 tx/ledger as conservative default until we have a
-        # better count source (XRPScan stats API when available)
-        total_tx_m = round(100 * 25_000 / 1_000_000, 3)   # = 2.5M
+    # ── Tx count from actual sample ──────────────────────────────────────
+    # proportions tuple now also returns raw total from sample
+    # sampled_total × (25000 / ledgers_ok) = daily estimate
+    total_tx_m = None
+    if ledgers_ok > 0 and proportions:
+        # sampled_total is stored in proportions["_total"] by get_category_proportions
+        _sampled_total = proportions.pop("_total", None)
+        if _sampled_total:
+            _scale     = 25_000 / ledgers_ok
+            total_tx_m = round(_sampled_total * _scale / 1_000_000, 4)
+            print(f"  Tx count: {_sampled_total} sampled × {_scale:.0f} scale "
+                  f"= {total_tx_m:.3f}M/day")
 
     # ── Category breakdowns ────────────────────────────────────────────────
     tx_cats = load_cats = {}
@@ -387,12 +396,23 @@ def update_data():
             except Exception:
                 data = []
 
-    # Reuse cached midnight_coins if already found today
+    # Reuse cached midnight_coins only if valid (must be > current coins)
     existing_today        = next((e for e in data if e.get("date") == date_str), None)
     cached_midnight_coins = None
     if existing_today and existing_today.get("open_coins_xrp"):
-        cached_midnight_coins = float(existing_today["open_coins_xrp"])
-        print(f"\n  Cached midnight coins: {cached_midnight_coins:,.4f} XRP")
+        candidate = float(existing_today["open_coins_xrp"])
+        # Validate: fetch current coins quickly to check cache is plausible
+        _vres  = get_ledger("validated")
+        _vinfo = parse_ledger(_vres)
+        _vcur  = _vinfo["coins"] if _vinfo else None
+        if _vcur and candidate > _vcur and (candidate - _vcur) < 5000:
+            # Difference must be > 0 and < 5000 XRP (daily burn is ~400-600 XRP)
+            cached_midnight_coins = candidate
+            print(f"\n  Cached midnight coins: {candidate:,.4f} XRP ✓ "
+                  f"(delta = {candidate - _vcur:.4f} XRP so far today)")
+        else:
+            print(f"\n  Cached open_coins={candidate:,.4f} failed validation "
+                  f"(current={_vcur}) — re-searching midnight ledger.")
 
     (burn, load, tx, tx_cats, load_cats,
      is_simulated, current_coins, midnight_coins) = get_real_metrics(
