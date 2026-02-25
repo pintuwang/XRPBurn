@@ -1,11 +1,10 @@
 name: Daily XRPBurn Update
 
 on:
-  workflow_dispatch:   # manual trigger from Actions tab
+  workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'   # top of every hour
+    - cron: '0 * * * *'
 
-# ── CRITICAL: grant write access so the bot can push data.json ──────────────
 permissions:
   contents: write
 
@@ -17,9 +16,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          # Use the token explicitly so authenticated pushes work
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Fetch full history so rebase has context
           fetch-depth: 0
 
       - name: Set up Python
@@ -28,7 +25,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: pip install pytz
+        run: pip install pytz requests requests
+
+      - name: Connectivity Check
+        # Diagnose XRPL node reachability before running the script
+        # so failures are obvious in the Actions log
+        run: |
+          echo "=== Connectivity diagnostics ==="
+          curl -s -o /dev/null -w "xrplcluster.com:     HTTP %{http_code}  time=%{time_total}s\n" \
+            -X POST https://xrplcluster.com \
+            -H "Content-Type: application/json" \
+            -d '{"method":"server_info","params":[{}]}' || echo "xrplcluster.com:     FAILED"
+          curl -s -o /dev/null -w "clio.xrpl.org:       HTTP %{http_code}  time=%{time_total}s\n" \
+            -X POST https://clio.xrpl.org \
+            -H "Content-Type: application/json" \
+            -d '{"method":"server_info","params":[{}]}' || echo "clio.xrpl.org:       FAILED"
+          curl -s -o /dev/null -w "coingecko.com:       HTTP %{http_code}  time=%{time_total}s\n" \
+            "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd" || echo "coingecko:           FAILED"
+          echo "================================"
 
       - name: Run Data Script
         run: python generate_data.py
@@ -37,19 +51,11 @@ jobs:
         run: |
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Stage only data.json — never accidentally commit other changes
           git add data.json
-
-          # Only proceed if data.json actually changed
           if git diff --cached --quiet; then
             echo "No changes to data.json — skipping commit."
             exit 0
           fi
-
           git commit -m "chore: update XRP burn data $(date -u +'%Y-%m-%d %H:%M UTC') [skip ci]"
-
-          # Pull with rebase BEFORE pushing to handle any concurrent runs gracefully
           git pull --rebase origin main
-
           git push origin main
