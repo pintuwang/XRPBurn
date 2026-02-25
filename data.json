@@ -2,6 +2,8 @@
     {
         "date": "2026-02-23",
         "last_updated": "2026-02-23 22:32:16",
+        "open_coins_xrp": null,
+        "total_coins_xrp": null,
         "burn_xrp": 442,
         "load_usd_m": 2120,
         "transactions": 1.1,
@@ -9,13 +11,13 @@
         "load_categories": {},
         "is_fallback": false,
         "is_partial": false,
-        "partial_as_of": null,
-        "open_coins_xrp": null,
-        "total_coins_xrp": null
+        "partial_as_of": null
     },
     {
         "date": "2026-02-24",
         "last_updated": "2026-02-24 23:39:02",
+        "open_coins_xrp": null,
+        "total_coins_xrp": null,
         "burn_xrp": null,
         "load_usd_m": null,
         "transactions": null,
@@ -23,32 +25,6 @@
         "load_categories": {},
         "is_fallback": false,
         "is_partial": false,
-        "partial_as_of": null,
-        "open_coins_xrp": null,
-        "total_coins_xrp": null
-    },
-    {
-        "date": "2026-02-25",
-        "last_updated": "2026-02-25 20:40:20",
-        "open_coins_xrp": 99985704522.25032,
-        "total_coins_xrp": 99985704080.97765,
-        "burn_xrp": 441.272675,
-        "load_usd_m": 2912.31,
-        "transactions": 2.5288,
-        "tx_categories": {
-            "settlement": 0.9425,
-            "identity": 0.0,
-            "defi": 1.0956,
-            "acct_mgmt": 0.4906
-        },
-        "load_categories": {
-            "settlement": 1085.46,
-            "identity": 0.0,
-            "defi": 1261.81,
-            "acct_mgmt": 565.04
-        },
-        "is_fallback": false,
-        "is_partial": true,
-        "partial_as_of": "20:40"
+        "partial_as_of": null
     }
 ]
