@@ -1,289 +1,134 @@
-"""
-XRPBurn Data Generator — v5
-============================
-- Uses urllib only (no requests needed)
-- v5 fix: total_coins fetched via ledger RPC (not server_info)
-  xrplcluster.com omits total_coins from server_info validated_ledger —
-  the ledger method always includes it in the ledger header.
-"""
-
 import json
 import os
 import sys
 import time
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
-XRPL_NODES = [
-    "https://xrplcluster.com",
-    "https://xrpl.ws",
-    "https://s2.ripple.com",
-]
-
-SAMPLE_LEDGER_COUNT = 40
-LEDGERS_PER_DAY     = 25_000
-REQUEST_TIMEOUT     = 30
-
+# Configuration
+XRPL_NODES = ["https://xrplcluster.com", "https://xrpl.ws", "https://s2.ripple.com"]
+SAMPLE_LEDGER_COUNT = 150  # Increased for better statistical stability
+LEDGERS_PER_DAY = 25000
+MAX_PAYMENT_XRP = 10_000_000  # Cap at 10M XRP to filter internal shuffles
+REQUEST_TIMEOUT = 30
 
 def fetch_json(url):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/5.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/6.0"})
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
             return json.loads(r.read().decode())
-    except urllib.error.HTTPError as e:
-        print(f"  [HTTP {e.code}] {url}")
-        return None
-    except Exception as e:
-        print(f"  [ERR] {url} -> {type(e).__name__}: {e}")
-        return None
-
+    except Exception: return None
 
 def xrpl_rpc(method, params=None):
     payload = json.dumps({"method": method, "params": [params or {}]}).encode()
     for node in XRPL_NODES:
         try:
-            req = urllib.request.Request(
-                node, data=payload,
-                headers={"Content-Type": "application/json",
-                         "User-Agent": "XRPBurnTracker/5.0"}
-            )
+            req = urllib.request.Request(node, data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
                 data = json.loads(r.read().decode())
-            result = data.get("result", {})
-            if result.get("status") == "success":
-                print(f"  [OK]  {method} via {node}")
-                return result
-            else:
-                print(f"  [WARN] {node} -> status='{result.get('status')}'")
-        except urllib.error.HTTPError as e:
-            print(f"  [HTTP {e.code}] {node}")
-        except Exception as e:
-            print(f"  [ERR] {node} -> {type(e).__name__}: {e}")
-    print(f"  [FAIL] All nodes failed for: {method}")
+            if data.get("result", {}).get("status") == "success":
+                return data["result"]
+        except Exception: continue
     return None
-
-
-def get_xrp_price():
-    data = fetch_json(
-        "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
-    )
-    if data and "ripple" in data:
-        price = float(data["ripple"]["usd"])
-        print(f"  [OK]  XRP price = ${price}")
-        return price
-    print("  [WARN] CoinGecko unavailable")
-    return None
-
 
 def get_ledger_info():
-    """
-    Fetch the validated ledger header directly via the 'ledger' RPC method.
-    This always includes total_coins, unlike server_info on some nodes.
-    Returns: { total_coins_xrp, ledger_index } or None.
-    """
-    result = xrpl_rpc("ledger", {
-        "ledger_index":  "validated",
-        "transactions":  False,
-        "expand":        False,
-        "owner_funds":   False,
-    })
-    if not result:
-        return None
+    res = xrpl_rpc("ledger", {"ledger_index": "validated"})
+    if not res: return None
+    ld = res.get("ledger") or res.get("closed", {}).get("ledger", {})
+    return {
+        "coins": int(ld["total_coins"]) / 1e6 if ld.get("total_coins") else None,
+        "seq": int(ld.get("ledger_index") or ld.get("seqNum") or 0)
+    }
 
-    # Response can nest the header under 'ledger' or 'ledger_current_index'
-    ledger = result.get("ledger") or result.get("closed", {}).get("ledger", {})
-
-    if not ledger:
-        print(f"  [WARN] ledger RPC returned no ledger object. Keys: {list(result.keys())}")
-        return None
-
-    print(f"  [DEBUG] ledger header keys: {list(ledger.keys())}")
-
-    raw_coins = ledger.get("total_coins")
-    if not raw_coins:
-        print(f"  [WARN] total_coins still missing. Full header: {ledger}")
-        return None
-
-    total_coins_xrp = int(raw_coins) / 1_000_000
-    ledger_index    = int(ledger.get("ledger_index") or ledger.get("seqNum") or
-                          result.get("ledger_index", 0))
-
-    print(f"  [OK]  total_coins = {total_coins_xrp:,.4f} XRP  |  ledger #{ledger_index}")
-    return {"total_coins_xrp": total_coins_xrp, "ledger_index": ledger_index}
-
-
-def classify_tx(tx_type):
-    if tx_type in ("Payment", "CheckCreate", "CheckCash", "CheckCancel"):
-        return "settlement"
-    if tx_type in ("OfferCreate", "OfferCancel",
-                   "AMMCreate", "AMMDeposit", "AMMWithdraw",
-                   "AMMBid", "AMMVote", "AMMDelete"):
-        return "defi"
-    if tx_type in ("DIDSet", "DIDDelete",
-                   "CredentialCreate", "CredentialAccept", "CredentialDelete",
-                   "DepositPreauth"):
-        return "identity"
+def classify(tx_type):
+    if tx_type in ("Payment", "CheckCreate", "CheckCash", "CheckCancel"): return "settlement"
+    if tx_type in ("OfferCreate", "OfferCancel", "AMMCreate", "AMMDeposit", "AMMWithdraw", "AMMBid", "AMMVote", "AMMDelete"): return "defi"
+    if tx_type in ("DIDSet", "DIDDelete", "CredentialCreate", "CredentialAccept", "CredentialDelete", "DepositPreauth"): return "identity"
     return "acct_mgmt"
 
-
-def sample_ledgers(start_index):
-    tx_counts       = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
-    payment_vol_xrp = 0.0
-    fee_drops       = 0
-    ledgers_ok      = 0
-
-    print(f"  Sampling {SAMPLE_LEDGER_COUNT} ledgers from #{start_index} ...")
-
+def sample_ledgers(start_seq):
+    counts = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
+    payment_amounts = []
+    ledgers_ok = 0
     for i in range(SAMPLE_LEDGER_COUNT):
-        result = xrpl_rpc("ledger", {
-            "ledger_index": start_index - i,
-            "transactions": True,
-            "expand":       True,
-        })
-        if not result:
-            continue
-        txs = result.get("ledger", {}).get("transactions", [])
-        if not txs:
-            continue
+        res = xrpl_rpc("ledger", {"ledger_index": start_seq - i, "transactions": True, "expand": True})
+        if not res: continue
+        txs = res.get("ledger", {}).get("transactions", [])
+        if not txs: continue
         ledgers_ok += 1
         for tx in txs:
-            if not isinstance(tx, dict):
-                continue
-            meta = tx.get("metaData") or tx.get("meta") or {}
-            if isinstance(meta, dict):
-                if meta.get("TransactionResult", "tesSUCCESS") != "tesSUCCESS":
-                    continue
-            cat = classify_tx(tx.get("TransactionType", ""))
-            tx_counts[cat] += 1
-            fee_drops += int(tx.get("Fee", 0))
             if tx.get("TransactionType") == "Payment":
                 amt = tx.get("Amount", 0)
                 if isinstance(amt, str):
-                    payment_vol_xrp += int(amt) / 1_000_000
+                    xrp_amt = int(amt) / 1e6
+                    if xrp_amt <= MAX_PAYMENT_XRP: payment_amounts.append(xrp_amt)
+            counts[classify(tx.get("TransactionType", ""))] += 1
         time.sleep(0.04)
+    return counts, payment_amounts, ledgers_ok
 
-    total = sum(tx_counts.values())
-    print(f"  Done: {ledgers_ok}/{SAMPLE_LEDGER_COUNT} ledgers | {total} txs | "
-          f"fees = {fee_drops/1e6:.4f} XRP")
-    print(f"  Categories: " + " | ".join(f"{k}={v}" for k, v in tx_counts.items()))
-    return tx_counts, payment_vol_xrp, fee_drops, ledgers_ok
+def get_real_metrics(prev_entry):
+    price_data = fetch_json("https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd")
+    xrp_price = float(price_data["ripple"]["usd"]) if price_data else 2.30
 
+    info = get_ledger_info()
+    if not info: return None, None, None, {}, {}, True, None
 
-def get_real_metrics(previous_total_coins=None):
-    print("\n--- Fetching XRP price ---")
-    xrp_price = get_xrp_price() or 2.30
+    # Burn Calculation (with Gap Recovery)
+    burn_xrp = None
+    if prev_entry and prev_entry.get("total_coins_xrp"):
+        days_diff = (datetime.now() - datetime.strptime(prev_entry["date"], "%Y-%m-%d")).days
+        total_burn = float(prev_entry["total_coins_xrp"]) - info["coins"]
+        burn_xrp = round(total_burn / max(1, days_diff), 6)
 
-    print("\n--- Fetching validated ledger header ---")
-    ledger_info = get_ledger_info()
-    if not ledger_info:
-        print("\n[CRITICAL] Cannot get ledger data — marking as simulated.")
-        return None, None, None, {}, {}, True, None
+    # Sampling
+    counts, payment_amts, ledgers_ok = sample_ledgers(info["seq"])
+    total_sampled = sum(counts.values())
 
-    current_total_coins = ledger_info["total_coins_xrp"]
-    current_ledger      = ledger_info["ledger_index"]
+    if not ledgers_ok or not total_sampled:
+        return burn_xrp, None, None, {}, {}, False, info["coins"]
 
-    if previous_total_coins and previous_total_coins > current_total_coins:
-        burn_xrp = round(previous_total_coins - current_total_coins, 6)
-        print(f"\n  Burn (delta): {burn_xrp} XRP")
-    else:
-        burn_xrp = None
-        print("\n  No valid previous total_coins — burn estimated from fees.")
+    scale = LEDGERS_PER_DAY / ledgers_ok
+    total_tx_m = round(total_sampled * scale / 1e6, 4)
+    tx_cats = {k: round(v * scale / 1e6, 4) for k, v in counts.items()}
 
-    print("\n--- Sampling ledgers for tx classification ---")
-    tx_counts_raw, payment_vol_sampled, fee_drops_sampled, ledgers_ok = \
-        sample_ledgers(current_ledger)
+    # Median Method for Load
+    payment_amts.sort()
+    median_val = payment_amts[len(payment_amts)//2] if payment_amts else 0
+    load_usd_m = round((median_val * (counts["settlement"] * scale) * xrp_price) / 1e6, 2)
+    load_cats = {k: round(load_usd_m * (v / total_sampled), 2) for k, v in counts.items()}
 
-    total_sampled = sum(tx_counts_raw.values())
-
-    if ledgers_ok == 0 or total_sampled == 0:
-        print("  [WARN] No ledger data — categories empty.")
-        if burn_xrp is None:
-            burn_xrp = 0.0
-        return burn_xrp, None, None, {}, {}, False, current_total_coins
-
-    scale      = LEDGERS_PER_DAY / ledgers_ok
-    total_tx_m = round(total_sampled * scale / 1_000_000, 4)
-    tx_cats    = {k: round(v * scale / 1_000_000, 4) for k, v in tx_counts_raw.items()}
-
-    payment_vol_daily = payment_vol_sampled * scale
-    load_usd_m        = round(payment_vol_daily * xrp_price / 1_000_000, 2)
-    load_cats         = {
-        k: round(load_usd_m * (tx_counts_raw[k] / total_sampled), 2)
-        for k in tx_counts_raw
-    }
-
-    if burn_xrp is None:
-        burn_xrp = round(fee_drops_sampled * scale / 1_000_000, 6)
-        print(f"  Burn (fee estimate): {burn_xrp} XRP/day")
-
-    print(f"\n=== FINAL RESULTS ===")
-    print(f"  burn_xrp   = {burn_xrp} XRP")
-    print(f"  load_usd_m = ${load_usd_m}M")
-    print(f"  total_tx   = {total_tx_m}M")
-    print(f"  tx_cats    = {tx_cats}")
-    print(f"  load_cats  = {load_cats}")
-
-    return burn_xrp, load_usd_m, total_tx_m, tx_cats, load_cats, False, current_total_coins
-
+    return burn_xrp, load_usd_m, total_tx_m, tx_cats, load_cats, False, info["coins"]
 
 def update_data():
-    sgt           = pytz.timezone("Asia/Singapore")
-    now           = datetime.now(sgt)
-    date_str      = now.strftime("%Y-%m-%d")
-    timestamp_str = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    print(f"\n{'='*55}")
-    print(f"  XRPBurn update: {timestamp_str} SGT")
-    print(f"{'='*55}")
-
+    sgt = pytz.timezone("Asia/Singapore")
+    date_str = datetime.now(sgt).strftime("%Y-%m-%d")
     file_path = "data.json"
+    
     data = []
     if os.path.exists(file_path):
         with open(file_path, "r") as f:
-            try:
-                data = json.load(f)
-            except Exception:
-                data = []
+            try: data = json.load(f)
+            except: data = []
 
-    previous_total_coins = None
-    for entry in reversed(data):
-        if entry.get("date") != date_str and entry.get("total_coins_xrp"):
-            previous_total_coins = float(entry["total_coins_xrp"])
-            print(f"\n  Previous total_coins from {entry['date']}: "
-                  f"{previous_total_coins:,.4f} XRP")
-            break
-
-    burn, load, tx, tx_cats, load_cats, is_simulated, current_total_coins = \
-        get_real_metrics(previous_total_coins)
+    prev = next((e for e in reversed(data) if e["date"] != date_str), None)
+    burn, load, tx, tx_cats, load_cats, is_sim, coins = get_real_metrics(prev)
 
     new_entry = {
-        "date":            date_str,
-        "last_updated":    timestamp_str,
-        "burn_xrp":        burn,
-        "load_usd_m":      load,
-        "transactions":    tx,
-        "tx_categories":   tx_cats,
+        "date": date_str,
+        "last_updated": datetime.now(sgt).strftime("%Y-%m-%d %H:%M:%S"),
+        "burn_xrp": burn,
+        "load_usd_m": load,
+        "transactions": tx,
+        "tx_categories": tx_cats,
         "load_categories": load_cats,
-        "is_fallback":     is_simulated,
-        "total_coins_xrp": current_total_coins,
+        "is_fallback": is_sim,
+        "total_coins_xrp": coins
     }
 
-    data = [e for e in data if e.get("date") != date_str]
-    data.append(new_entry)
-    data = data[-90:]
-
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=4)
-
-    print(f"\n  Saved {date_str} | is_fallback={is_simulated}")
-    if is_simulated:
-        print("  !! Fallback — could not get valid XRPL data.")
-        sys.exit(1)
-    else:
-        print("  Success — real data written.")
-
+    data = [e for e in data if e["date"] != date_str] + [new_entry]
+    with open(file_path, "w") as f: json.dump(data[-90:], f, indent=4)
 
 if __name__ == "__main__":
     update_data()
