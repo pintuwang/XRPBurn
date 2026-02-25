@@ -5,16 +5,26 @@
         "burn_xrp": 442,
         "load_usd_m": 2120,
         "transactions": 1.1,
-        "tx_categories": { "settlement": 0.77, "identity": 0.165, "defi": 0.11, "acct_mgmt": 0.055 },
-        "load_categories": { "settlement": 1908.0, "identity": 42.4, "defi": 148.4, "acct_mgmt": 21.2 },
+        "tx_categories": {
+            "settlement": 0.77,
+            "identity": 0.165,
+            "defi": 0.11,
+            "acct_mgmt": 0.055
+        },
+        "load_categories": {
+            "settlement": 1908.0,
+            "identity": 42.4,
+            "defi": 148.4,
+            "acct_mgmt": 21.2
+        },
         "is_fallback": false,
-        "total_coins_xrp": 99985704823.95278
+        "total_coins_xrp": 99985704823.95277
     },
     {
         "date": "2026-02-24",
         "last_updated": "2026-02-24 23:39:02",
         "burn_xrp": 176.92,
-        "load_usd_m": 12.50,
+        "load_usd_m": 12.5,
         "transactions": 1.25,
         "tx_categories": {},
         "load_categories": {},
@@ -23,13 +33,23 @@
     },
     {
         "date": "2026-02-25",
-        "last_updated": "2026-02-25 14:03:11",
-        "burn_xrp": 176.92,
-        "load_usd_m": 13.60,
-        "transactions": 2.8338,
-        "tx_categories": { "settlement": 1.4044, "identity": 0.0, "defi": 0.9294, "acct_mgmt": 0.5 },
-        "load_categories": { "settlement": 6.74, "identity": 0.0, "defi": 4.46, "acct_mgmt": 2.40 },
+        "last_updated": "2026-02-25 15:29:57",
+        "burn_xrp": 470.042633,
+        "load_usd_m": 0.0,
+        "transactions": 3.6748,
+        "tx_categories": {
+            "settlement": 2.2418,
+            "identity": 0.0,
+            "defi": 0.983,
+            "acct_mgmt": 0.45
+        },
+        "load_categories": {
+            "settlement": 0.0,
+            "identity": 0.0,
+            "defi": 0.0,
+            "acct_mgmt": 0.0
+        },
         "is_fallback": false,
-        "total_coins_xrp": 99985704207.02965
+        "total_coins_xrp": 99985704176.99014
     }
 ]
