@@ -57,6 +57,17 @@
             if (loadChartInstance) loadChartInstance.destroy();
             if (txChartInstance) txChartInstance.destroy();
 
+
+            // ... (inside renderCharts function) ...
+            const burnLine = {
+                label: 'Actual XRP Burn',
+                data: displayData.map(d => d.burn_xrp ?? null),
+                borderColor: 'red',
+                backgroundColor: 'rgba(255,0,0,0.1)',
+                type: 'line',
+                yAxisID: 'y1',
+                spanGaps: true  // Keep the line connected even if a day has null data
+            };
             const createDatasets = (dataKey, catKey) => {
                 const ds = catKeys.map(cat => ({
                     label: cat.charAt(0).toUpperCase() + cat.slice(1),
