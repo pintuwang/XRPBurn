@@ -1,16 +1,17 @@
 """
-XRPBurn Data Generator — v8
+XRPBurn Data Generator — v9
 ============================
-Option 1: Opening snapshot protection
-  - open_coins_xrp written ONCE at first run of the day, never overwritten
-  - Burn = open_coins_xrp − current_coins (true midnight-to-now delta)
-  - Safe to run manually mid-day without corrupting the day's burn figure
+Key fix: open_coins_xrp is always fetched from the actual 00:00 SGT ledger
+via binary search — NOT from "first run of the day."
 
-Option 3: Partial day awareness
-  - is_partial = True whenever run before 23:30 SGT
-  - partial_as_of = "HH:MM" SGT timestamp
-  - 23:30+ SGT run sets is_partial = False (day considered complete)
-  - index.html shows semi-transparent bars for partial days
+This means:
+  - Manual runs at any time produce the same burn figure
+  - Multiple runs never distort the burn value
+  - Burn = coins at 00:00 SGT − coins now (true calendar-day burn)
+
+Option 1: open_coins_xrp stored in data.json but re-derived each run
+          (stored only to avoid extra API call if already found today)
+Option 3: is_partial / partial_as_of flags for chart transparency
 """
 
 import json
@@ -19,7 +20,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pytz
 
 XRPL_NODES = [
@@ -30,13 +31,18 @@ XRPL_NODES = [
 
 SAMPLE_LEDGER_COUNT = 40
 REQUEST_TIMEOUT     = 30
-DAY_COMPLETE_HOUR   = 23   # SGT hour after which day is considered complete
-DAY_COMPLETE_MIN    = 30   # SGT minute
+RIPPLE_EPOCH        = 946684800   # Jan 1 2000 00:00 UTC in unix seconds
+DAY_COMPLETE_HOUR   = 23
+DAY_COMPLETE_MIN    = 30
 
+
+# ---------------------------------------------------------------------------
+# Network helpers
+# ---------------------------------------------------------------------------
 
 def fetch_json(url):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/8.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/9.0"})
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
@@ -54,30 +60,82 @@ def xrpl_rpc(method, params=None):
             req = urllib.request.Request(
                 node, data=payload,
                 headers={"Content-Type": "application/json",
-                         "User-Agent": "XRPBurnTracker/8.0"}
+                         "User-Agent": "XRPBurnTracker/9.0"}
             )
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
                 data = json.loads(r.read().decode())
             result = data.get("result", {})
             if result.get("status") == "success":
-                print(f"  [OK]  {method} via {node}")
                 return result
-            else:
-                print(f"  [WARN] {node} -> status='{result.get('status')}'")
-        except urllib.error.HTTPError as e:
-            print(f"  [HTTP {e.code}] {node}")
         except Exception as e:
-            print(f"  [ERR] {node} -> {type(e).__name__}: {e}")
-    print(f"  [FAIL] All nodes failed for: {method}")
+            pass
+    return None
+
+
+def parse_ledger_result(res):
+    """Extract seq, total_coins_xrp, close_time_utc from a ledger RPC result."""
+    if not res:
+        return None
+    ld = res.get("ledger") or res.get("closed", {}).get("ledger", {})
+    if not ld:
+        return None
+    seq       = int(ld.get("ledger_index") or ld.get("seqNum") or
+                    res.get("ledger_index", 0))
+    raw_coins = ld.get("total_coins")
+    coins     = int(raw_coins) / 1_000_000 if raw_coins else None
+    close_ts  = ld.get("close_time")
+    close_utc = (datetime.fromtimestamp(close_ts + RIPPLE_EPOCH,
+                                        tz=timezone.utc)
+                 if close_ts is not None else None)
+    return {"seq": seq, "coins": coins, "time_utc": close_utc}
+
+
+# ---------------------------------------------------------------------------
+# 1. Find the ledger at midnight SGT (binary search)
+# ---------------------------------------------------------------------------
+
+def find_midnight_ledger(current_seq, current_time_utc, midnight_utc):
+    """
+    Binary-search XRPL for the ledger whose close_time is closest to
+    midnight SGT (= 16:00 UTC previous day).
+
+    Returns total_coins_xrp at midnight, or None on failure.
+    Each ledger closes ~3.5 seconds after the previous one.
+    """
+    print(f"  Target midnight UTC: {midnight_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+    est_seq = current_seq + int(
+        (midnight_utc - current_time_utc).total_seconds() / 3.5
+    )
+
+    for attempt in range(6):
+        res  = xrpl_rpc("ledger", {"ledger_index": est_seq,
+                                    "transactions": False})
+        info = parse_ledger_result(res)
+        if not info or not info["time_utc"]:
+            print(f"  [WARN] Could not fetch ledger #{est_seq}")
+            break
+        delta_s    = (midnight_utc - info["time_utc"]).total_seconds()
+        correction = int(delta_s / 3.5)
+        sgt        = timezone(timedelta(hours=8))
+        print(f"  Attempt {attempt+1}: #{info['seq']:,}  "
+              f"{info['time_utc'].astimezone(sgt).strftime('%H:%M:%S SGT')}  "
+              f"(Δ {delta_s/60:+.1f} min)")
+        if abs(correction) < 5:
+            if info["coins"]:
+                print(f"  → Midnight coins: {info['coins']:,.4f} XRP")
+                return info["coins"]
+            break
+        est_seq += correction
+
+    print("  [WARN] Could not pinpoint midnight ledger.")
     return None
 
 
 # ---------------------------------------------------------------------------
-# Data sources
+# 2. CoinGecko — price + 24h volume
 # ---------------------------------------------------------------------------
 
 def get_coingecko_data():
-    """Price + rolling 24h exchange volume."""
     data = fetch_json(
         "https://api.coingecko.com/api/v3/coins/ripple"
         "?localization=false&tickers=false&market_data=true"
@@ -89,7 +147,6 @@ def get_coingecko_data():
         vol   = float(md["total_volume"]["usd"])
         print(f"  [OK]  price=${price:.4f} | 24h vol=${vol/1e6:.0f}M")
         return price, vol
-    # Fallback — price only
     simple = fetch_json(
         "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
     )
@@ -100,31 +157,30 @@ def get_coingecko_data():
     return None, None
 
 
-def get_ledger_info():
-    """Validated ledger: total_coins + seq. Uses ledger RPC (server_info omits total_coins)."""
+# ---------------------------------------------------------------------------
+# 3. Current validated ledger
+# ---------------------------------------------------------------------------
+
+def get_current_ledger():
     result = xrpl_rpc("ledger", {
         "ledger_index": "validated",
         "transactions": False,
         "expand":       False,
     })
-    if not result:
+    info = parse_ledger_result(result)
+    if not info:
         return None
-    ledger = result.get("ledger") or result.get("closed", {}).get("ledger", {})
-    if not ledger:
-        print(f"  [WARN] No ledger object. Keys: {list(result.keys())}")
+    if not info["coins"]:
+        print(f"  [WARN] total_coins missing from validated ledger")
         return None
-    raw_coins = ledger.get("total_coins")
-    if not raw_coins:
-        print(f"  [WARN] total_coins missing. Keys: {list(ledger.keys())}")
-        return None
-    total_coins_xrp = int(raw_coins) / 1_000_000
-    ledger_index    = int(
-        ledger.get("ledger_index") or ledger.get("seqNum") or
-        result.get("ledger_index", 0)
-    )
-    print(f"  [OK]  total_coins={total_coins_xrp:,.4f} XRP | ledger #{ledger_index}")
-    return {"total_coins_xrp": total_coins_xrp, "ledger_index": ledger_index}
+    print(f"  [OK]  seq=#{info['seq']:,} | coins={info['coins']:,.4f} XRP | "
+          f"time={info['time_utc']}")
+    return info
 
+
+# ---------------------------------------------------------------------------
+# 4. Category proportions from sampled ledgers
+# ---------------------------------------------------------------------------
 
 def classify_tx(tx_type):
     if tx_type in ("Payment", "CheckCreate", "CheckCash", "CheckCancel"):
@@ -138,21 +194,15 @@ def classify_tx(tx_type):
     return "acct_mgmt"
 
 
-def get_category_proportions(current_ledger):
-    """
-    Sample 40 ledgers for tx type breakdown.
-    Returns proportions (ratios) — reliable even from small sample.
-    Also returns fee_drops for burn fallback.
-    """
+def get_category_proportions(current_ledger_seq):
     tx_counts  = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
     fee_drops  = 0
     ledgers_ok = 0
 
-    print(f"  Sampling {SAMPLE_LEDGER_COUNT} ledgers from #{current_ledger} ...")
-
+    print(f"  Sampling {SAMPLE_LEDGER_COUNT} ledgers ...")
     for i in range(SAMPLE_LEDGER_COUNT):
         result = xrpl_rpc("ledger", {
-            "ledger_index": current_ledger - i,
+            "ledger_index": current_ledger_seq - i,
             "transactions": True,
             "expand":       True,
         })
@@ -180,84 +230,80 @@ def get_category_proportions(current_ledger):
         return None, fee_drops, ledgers_ok
 
     proportions = {k: v / total for k, v in tx_counts.items()}
-    print(f"  {ledgers_ok} ledgers | {total} txs")
-    print(f"  Proportions: " +
-          " | ".join(f"{k}={v*100:.1f}%" for k, v in proportions.items()))
+    print(f"  {ledgers_ok} ledgers | {total} txs sampled")
+    print(f"  " + " | ".join(f"{k}={v*100:.1f}%" for k, v in proportions.items()))
     return proportions, fee_drops, ledgers_ok
 
 
 # ---------------------------------------------------------------------------
-# Main metric builder
+# Main
 # ---------------------------------------------------------------------------
 
-def get_real_metrics(open_coins_xrp=None):
+def get_real_metrics(midnight_utc, existing_midnight_coins=None):
     """
-    open_coins_xrp: total_coins at 00:00 SGT today (preserved from first run).
-    If None this is the first run of the day — current coins become the opening snapshot.
+    midnight_utc: datetime of 00:00 SGT for today, in UTC
+    existing_midnight_coins: cached value from a previous run today (skip re-fetch if present)
     """
+
     print("\n--- CoinGecko: price + 24h volume ---")
     xrp_price, volume_24h_usd = get_coingecko_data()
     if xrp_price is None:
         xrp_price = 2.30
-        print(f"  Using fallback price ${xrp_price}")
 
-    print("\n--- XRPL: validated ledger ---")
-    ledger_info = get_ledger_info()
-    if not ledger_info:
-        print("\n[CRITICAL] Cannot reach XRPL — marking as simulated.")
+    print("\n--- XRPL: current validated ledger ---")
+    current = get_current_ledger()
+    if not current:
+        print("[CRITICAL] Cannot reach XRPL.")
         return None, None, None, {}, {}, True, None, None
 
-    current_total_coins = ledger_info["total_coins_xrp"]
-    current_ledger      = ledger_info["ledger_index"]
+    # ── Midnight coins (Option 1 — always from real midnight ledger) ──────
+    print("\n--- XRPL: midnight SGT ledger ---")
+    if existing_midnight_coins:
+        # Already found and cached from an earlier run today — reuse it
+        midnight_coins = existing_midnight_coins
+        print(f"  Using cached midnight coins: {midnight_coins:,.4f} XRP")
+    else:
+        midnight_coins = find_midnight_ledger(
+            current["seq"], current["time_utc"], midnight_utc
+        )
 
-    # ── Burn calculation ──────────────────────────────────────────────────
-    # open_coins_xrp is the snapshot from 00:00 SGT (first run of the day).
-    # We NEVER overwrite it — so mid-day manual runs don't corrupt it.
-    if open_coins_xrp and open_coins_xrp > current_total_coins:
-        burn_xrp = round(open_coins_xrp - current_total_coins, 6)
-        print(f"\n  Burn (open→now): {open_coins_xrp:.4f} − "
-              f"{current_total_coins:.4f} = {burn_xrp} XRP")
+    # ── Burn = midnight − now ─────────────────────────────────────────────
+    if midnight_coins and midnight_coins > current["coins"]:
+        burn_xrp = round(midnight_coins - current["coins"], 6)
+        print(f"\n  Burn (midnight→now): {midnight_coins:.4f} − "
+              f"{current['coins']:.4f} = {burn_xrp} XRP")
     else:
         burn_xrp = None
-        print("\n  First run of day — burn will be estimated from fees.")
+        print("\n  [WARN] Could not compute burn from midnight delta.")
 
     print("\n--- XRPL: category proportions ---")
-    proportions, fee_drops_sampled, ledgers_ok = \
-        get_category_proportions(current_ledger)
+    proportions, fee_drops, ledgers_ok = \
+        get_category_proportions(current["seq"])
 
-    # Burn fallback from fees if no open snapshot yet
-    if burn_xrp is None:
-        if ledgers_ok > 0:
-            scale    = 25_000 / ledgers_ok
-            burn_xrp = round(fee_drops_sampled * scale / 1_000_000, 6)
-            print(f"  Burn (fee estimate): {burn_xrp} XRP")
-        else:
-            burn_xrp = 0.0
+    # Burn fallback from fees
+    if burn_xrp is None and ledgers_ok > 0:
+        scale    = 25_000 / ledgers_ok
+        burn_xrp = round(fee_drops * scale / 1_000_000, 6)
+        print(f"  Burn (fee estimate): {burn_xrp} XRP")
 
-    # ── Load from CoinGecko 24h volume ────────────────────────────────────
+    # ── Load ──────────────────────────────────────────────────────────────
     load_usd_m = round(volume_24h_usd / 1_000_000, 2) if volume_24h_usd else None
-    print(f"\n  Load (CoinGecko 24h): ${load_usd_m:,.0f}M" if load_usd_m else
-          "\n  [WARN] No volume data")
 
-    # ── Tx count from fee-based proxy ────────────────────────────────────
+    # ── Tx count proxy ────────────────────────────────────────────────────
     total_tx_m = None
-    if ledgers_ok > 0 and fee_drops_sampled > 0:
-        avg_fee = fee_drops_sampled / max(
-            sum(1 for _ in range(ledgers_ok)) * 50, 1
-        )
+    if ledgers_ok > 0 and fee_drops > 0:
+        avg_fee = fee_drops / max(ledgers_ok * 50, 1)
         if avg_fee > 0:
             scale      = 25_000 / ledgers_ok
-            total_tx_m = round(
-                (fee_drops_sampled / avg_fee) * scale / 1_000_000, 4
-            )
+            total_tx_m = round((fee_drops / avg_fee) * scale / 1_000_000, 4)
 
     # ── Category breakdowns ───────────────────────────────────────────────
-    tx_cats   = {}
-    load_cats = {}
-    if proportions and total_tx_m:
-        tx_cats = {k: round(proportions[k] * total_tx_m, 4) for k in proportions}
-    if proportions and load_usd_m:
-        load_cats = {k: round(proportions[k] * load_usd_m, 2) for k in proportions}
+    tx_cats = load_cats = {}
+    if proportions:
+        if total_tx_m:
+            tx_cats = {k: round(proportions[k] * total_tx_m, 4) for k in proportions}
+        if load_usd_m:
+            load_cats = {k: round(proportions[k] * load_usd_m, 2) for k in proportions}
 
     print(f"\n=== RESULTS ===")
     print(f"  burn_xrp   = {burn_xrp} XRP")
@@ -266,29 +312,32 @@ def get_real_metrics(open_coins_xrp=None):
     print(f"  tx_cats    = {tx_cats}")
 
     return (burn_xrp, load_usd_m, total_tx_m, tx_cats, load_cats,
-            False, current_total_coins, proportions)
+            False, current["coins"], midnight_coins)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def update_data():
-    sgt           = pytz.timezone("Asia/Singapore")
-    now           = datetime.now(sgt)
+    sgt = pytz.timezone("Asia/Singapore")
+    now = datetime.now(sgt)
+
     date_str      = now.strftime("%Y-%m-%d")
     timestamp_str = now.strftime("%Y-%m-%d %H:%M:%S")
     time_str      = now.strftime("%H:%M")
 
-    # Day is "complete" after 23:30 SGT
+    # Midnight SGT today in UTC
+    midnight_sgt = sgt.localize(
+        datetime(now.year, now.month, now.day, 0, 0, 0)
+    )
+    midnight_utc = midnight_sgt.astimezone(timezone.utc)
+
     is_partial = not (now.hour > DAY_COMPLETE_HOUR or
                       (now.hour == DAY_COMPLETE_HOUR and
                        now.minute >= DAY_COMPLETE_MIN))
 
-    print(f"\n{'='*55}")
+    print(f"\n{'='*57}")
     print(f"  XRPBurn update: {timestamp_str} SGT")
-    print(f"  is_partial: {is_partial} (complete after {DAY_COMPLETE_HOUR}:{DAY_COMPLETE_MIN:02d} SGT)")
-    print(f"{'='*55}")
+    print(f"  is_partial: {is_partial}  "
+          f"(complete after {DAY_COMPLETE_HOUR}:{DAY_COMPLETE_MIN:02d} SGT)")
+    print(f"{'='*57}")
 
     file_path = "data.json"
     data = []
@@ -299,42 +348,34 @@ def update_data():
             except Exception:
                 data = []
 
-    # Find existing entry for today (if any)
-    existing_today = next((e for e in data if e.get("date") == date_str), None)
-
-    # ── OPTION 1: Preserve opening snapshot ──────────────────────────────
-    # open_coins_xrp is only written on the FIRST run of each day.
-    # All subsequent runs (including manual) read it back and keep it intact.
-    # This means burn always measures from true day-open, not last-run.
-    open_coins_xrp = None
+    # Check if we already found midnight_coins for today (skip re-search)
+    existing_today         = next((e for e in data if e.get("date") == date_str), None)
+    existing_midnight_coins = None
     if existing_today and existing_today.get("open_coins_xrp"):
-        open_coins_xrp = float(existing_today["open_coins_xrp"])
-        print(f"\n  Preserved open_coins from first run: {open_coins_xrp:,.4f} XRP")
-    else:
-        print(f"\n  First run of the day — will set open_coins_xrp from current state.")
+        existing_midnight_coins = float(existing_today["open_coins_xrp"])
+        print(f"\n  Cached midnight coins from earlier run: "
+              f"{existing_midnight_coins:,.4f} XRP")
 
-    burn, load, tx, tx_cats, load_cats, is_simulated, current_total_coins, proportions = \
-        get_real_metrics(open_coins_xrp)
+    (burn, load, tx, tx_cats, load_cats,
+     is_simulated, current_coins, midnight_coins) = get_real_metrics(
+        midnight_utc, existing_midnight_coins
+    )
 
-    # ── Build new entry ───────────────────────────────────────────────────
     new_entry = {
         "date":             date_str,
         "last_updated":     timestamp_str,
-
-        # OPTION 1: open_coins set once (first run), then frozen
-        "open_coins_xrp":  open_coins_xrp if open_coins_xrp else current_total_coins,
-
-        # Current coins stored for reference / next day's open comparison
-        "total_coins_xrp":  current_total_coins,
-
+        # open_coins = coins at 00:00 SGT (from midnight ledger binary search)
+        # Cached after first successful find — never changes for the same day
+        "open_coins_xrp":  midnight_coins or (
+            existing_midnight_coins if existing_midnight_coins else None
+        ),
+        "total_coins_xrp":  current_coins,
         "burn_xrp":         burn,
         "load_usd_m":       load,
         "transactions":     tx,
         "tx_categories":    tx_cats,
         "load_categories":  load_cats,
         "is_fallback":      is_simulated,
-
-        # OPTION 3: partial day flags
         "is_partial":       is_partial,
         "partial_as_of":    time_str if is_partial else None,
     }
@@ -346,7 +387,7 @@ def update_data():
     with open(file_path, "w") as f:
         json.dump(data, f, indent=4)
 
-    status = "PARTIAL (" + time_str + " SGT)" if is_partial else "COMPLETE"
+    status = f"PARTIAL ({time_str} SGT)" if is_partial else "COMPLETE"
     print(f"\n  Saved {date_str} | {status} | is_fallback={is_simulated}")
     if is_simulated:
         print("  !! Fallback — XRPL unreachable.")
