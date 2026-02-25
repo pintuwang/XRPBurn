@@ -120,14 +120,19 @@
 
         function checkDataWarnings() {
             const warningEl = document.getElementById('data-warning');
-            const simulated = rawData.filter(d => d.is_fallback);
+            const simulated = rawData.filter(d => d.is_fallback === true);
+            const pending   = rawData.filter(d => !d.is_fallback && !hasCategories(d.tx_categories));
+
+            let msgs = [];
             if (simulated.length > 0) {
-                const dates = simulated.map(d => d.date).join(', ');
+                msgs.push(`🎈 <strong>${simulated.length} day(s) used hardcoded fallback data</strong> (XRPL unreachable): <em>${simulated.map(d=>d.date).join(', ')}</em>`);
+            }
+            if (pending.length > 0) {
+                msgs.push(`⏳ <strong>${pending.length} day(s) awaiting real category data</strong> from next scheduled run: <em>${pending.map(d=>d.date).join(', ')}</em>`);
+            }
+            if (msgs.length > 0) {
                 warningEl.style.display = 'block';
-                warningEl.innerHTML =
-                    `⚠️ <strong>${simulated.length} day(s) contain simulated data</strong>` +
-                    ` (XRPL node was unreachable during scheduled update): <em>${dates}</em>. ` +
-                    `These are marked with 🎈 on the charts.`;
+                warningEl.innerHTML = msgs.join('<br>');
             } else {
                 warningEl.style.display = 'none';
             }
@@ -160,7 +165,7 @@
             loadDatasets.push({
                 label: 'In Progress',
                 data: displayData.map(d =>
-                    !hasCategories(d.load_categories) ? (d.load_usd_m || 0) : 0
+                    !hasCategories(d.load_categories) ? (d.load_usd_m ?? null) : 0
                 ),
                 backgroundColor: colors.pending,
                 stack: 'Stack 0'
@@ -231,7 +236,7 @@
             txDatasets.push({
                 label: 'In Progress',
                 data: displayData.map(d =>
-                    !hasCategories(d.tx_categories) ? (d.transactions || 0) : 0
+                    !hasCategories(d.tx_categories) ? (d.transactions ?? null) : 0
                 ),
                 backgroundColor: colors.pending,
                 stack: 'Stack 0'
