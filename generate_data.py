@@ -1,13 +1,13 @@
 """
-XRPBurn Data Generator — v5
+XRPBurn Data Generator — v6
 ============================
 - Uses urllib only (no pip installs beyond pytz)
-- total_coins fetched via ledger RPC (not server_info — xrplcluster omits it there)
-- Burn = total_coins delta between days
-- Tx categories sampled from real ledger transactions
-- Trimmed mean for load volume (drops bottom 10% dust + top 1% whales)
-- Never writes fake percentage splits — empty {} = blue In Progress bar
-- sys.exit(1) on failure so GitHub Actions shows red X, not silent green tick
+- total_coins fetched via ledger RPC (xrplcluster omits it from server_info)
+- Burn = total_coins delta between days (most accurate)
+- Load = capped sum: each payment capped at 10M XRP (removes wash trades,
+  keeps real large settlements), then scaled to daily estimate
+- Never writes fake percentage splits
+- sys.exit(1) on failure so GitHub Actions shows red X
 """
 
 import json
@@ -28,11 +28,12 @@ XRPL_NODES = [
 SAMPLE_LEDGER_COUNT = 40
 LEDGERS_PER_DAY     = 25_000
 REQUEST_TIMEOUT     = 30
+MAX_SINGLE_PAYMENT  = 10_000_000   # 10M XRP cap — above = exchange internal shuffle
 
 
 def fetch_json(url):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/5.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/6.0"})
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
@@ -50,7 +51,7 @@ def xrpl_rpc(method, params=None):
             req = urllib.request.Request(
                 node, data=payload,
                 headers={"Content-Type": "application/json",
-                         "User-Agent": "XRPBurnTracker/5.0"}
+                         "User-Agent": "XRPBurnTracker/6.0"}
             )
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
                 data = json.loads(r.read().decode())
@@ -82,9 +83,8 @@ def get_xrp_price():
 
 def get_ledger_info():
     """
-    Fetch validated ledger header via the ledger RPC method.
-    xrplcluster.com strips total_coins from server_info, but the
-    ledger method always returns the full header including total_coins.
+    Fetch validated ledger via ledger RPC — always includes total_coins.
+    server_info on xrplcluster.com strips total_coins, so we don't use it.
     """
     result = xrpl_rpc("ledger", {
         "ledger_index": "validated",
@@ -93,17 +93,14 @@ def get_ledger_info():
     })
     if not result:
         return None
-
     ledger = result.get("ledger") or result.get("closed", {}).get("ledger", {})
     if not ledger:
-        print(f"  [WARN] No ledger object in response. Keys: {list(result.keys())}")
+        print(f"  [WARN] No ledger object. Keys: {list(result.keys())}")
         return None
-
     raw_coins = ledger.get("total_coins")
     if not raw_coins:
         print(f"  [WARN] total_coins missing. Ledger keys: {list(ledger.keys())}")
         return None
-
     total_coins_xrp = int(raw_coins) / 1_000_000
     ledger_index    = int(
         ledger.get("ledger_index") or ledger.get("seqNum") or
@@ -125,23 +122,13 @@ def classify_tx(tx_type):
     return "acct_mgmt"
 
 
-def trimmed_mean(values, drop_bottom=0.10, drop_top=0.01):
-    """Mean after removing bottom 10% dust and top 1% whale outliers."""
-    if not values:
-        return 0.0
-    s  = sorted(values)
-    n  = len(s)
-    lo = int(n * drop_bottom)
-    hi = int(n * (1 - drop_top))
-    trimmed = s[lo:hi]
-    return sum(trimmed) / len(trimmed) if trimmed else 0.0
-
-
 def sample_ledgers(start_index):
-    tx_counts       = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
-    payment_amounts = []   # individual XRP payment sizes (raw, for trimmed mean)
-    fee_drops       = 0
-    ledgers_ok      = 0
+    tx_counts        = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
+    capped_vol_xrp   = 0.0    # sum of payments, each capped at MAX_SINGLE_PAYMENT
+    fee_drops        = 0
+    ledgers_ok       = 0
+    payments_seen    = 0
+    payments_capped  = 0
 
     print(f"  Sampling {SAMPLE_LEDGER_COUNT} ledgers from #{start_index} ...")
 
@@ -169,15 +156,20 @@ def sample_ledgers(start_index):
             fee_drops += int(tx.get("Fee", 0))
             if tx.get("TransactionType") == "Payment":
                 amt = tx.get("Amount", 0)
-                if isinstance(amt, str):
-                    payment_amounts.append(int(amt) / 1_000_000)
+                if isinstance(amt, str):   # XRP in drops (IOU Amount is a dict)
+                    xrp_amt = int(amt) / 1_000_000
+                    payments_seen += 1
+                    if xrp_amt > MAX_SINGLE_PAYMENT:
+                        payments_capped += 1
+                    capped_vol_xrp += min(xrp_amt, MAX_SINGLE_PAYMENT)
         time.sleep(0.04)
 
     total = sum(tx_counts.values())
-    print(f"  Done: {ledgers_ok}/{SAMPLE_LEDGER_COUNT} ledgers | {total} txs | "
-          f"fees = {fee_drops/1e6:.4f} XRP | payments = {len(payment_amounts)}")
+    print(f"  Done: {ledgers_ok}/{SAMPLE_LEDGER_COUNT} ledgers | {total} txs")
+    print(f"  Payments: {payments_seen} seen | {payments_capped} capped at {MAX_SINGLE_PAYMENT:,} XRP")
+    print(f"  Capped vol: {capped_vol_xrp:,.2f} XRP | fees: {fee_drops/1e6:.4f} XRP")
     print(f"  Categories: " + " | ".join(f"{k}={v}" for k, v in tx_counts.items()))
-    return tx_counts, payment_amounts, fee_drops, ledgers_ok
+    return tx_counts, capped_vol_xrp, fee_drops, ledgers_ok
 
 
 def get_real_metrics(previous_total_coins=None):
@@ -193,7 +185,7 @@ def get_real_metrics(previous_total_coins=None):
     current_total_coins = ledger_info["total_coins_xrp"]
     current_ledger      = ledger_info["ledger_index"]
 
-    # Burn = daily drop in total circulating supply (most accurate method)
+    # Burn = daily drop in total circulating supply
     if previous_total_coins and previous_total_coins > current_total_coins:
         burn_xrp = round(previous_total_coins - current_total_coins, 6)
         print(f"\n  Burn (delta): {burn_xrp} XRP")
@@ -202,7 +194,7 @@ def get_real_metrics(previous_total_coins=None):
         print("\n  No valid previous total_coins — burn estimated from fees.")
 
     print("\n--- Sampling ledgers ---")
-    tx_counts_raw, payment_amounts, fee_drops_sampled, ledgers_ok = \
+    tx_counts_raw, capped_vol_xrp, fee_drops_sampled, ledgers_ok = \
         sample_ledgers(current_ledger)
 
     total_sampled = sum(tx_counts_raw.values())
@@ -213,15 +205,14 @@ def get_real_metrics(previous_total_coins=None):
             burn_xrp = 0.0
         return burn_xrp, None, None, {}, {}, False, current_total_coins
 
+    # Scale sample window → full day
     scale      = LEDGERS_PER_DAY / ledgers_ok
     total_tx_m = round(total_sampled * scale / 1_000_000, 4)
     tx_cats    = {k: round(v * scale / 1_000_000, 4) for k, v in tx_counts_raw.items()}
 
-    # Load = trimmed mean payment size × scaled payment count × price
-    tmean             = trimmed_mean(payment_amounts)
-    payment_count_day = int(tx_counts_raw["settlement"] * scale)
-    volume_xrp        = tmean * payment_count_day
-    load_usd_m        = round(volume_xrp * xrp_price / 1_000_000, 2)
+    # Load = capped daily volume × price (in USD millions)
+    daily_vol_xrp = capped_vol_xrp * scale
+    load_usd_m    = round(daily_vol_xrp * xrp_price / 1_000_000, 2)
 
     # Load categories proportional to tx share
     load_cats = {
@@ -235,7 +226,7 @@ def get_real_metrics(previous_total_coins=None):
 
     print(f"\n=== FINAL RESULTS ===")
     print(f"  burn_xrp   = {burn_xrp} XRP")
-    print(f"  load_usd_m = ${load_usd_m}M")
+    print(f"  load_usd_m = ${load_usd_m}M  (daily_vol={daily_vol_xrp:,.0f} XRP)")
     print(f"  total_tx   = {total_tx_m}M")
     print(f"  tx_cats    = {tx_cats}")
     print(f"  load_cats  = {load_cats}")
