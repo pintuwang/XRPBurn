@@ -11,12 +11,21 @@
         .dot-legend { font-size: 0.8em; margin-top: 10px; margin-bottom: 20px; }
         button { padding: 8px 15px; cursor: pointer; background: #0c2c56; color: white; border: none; border-radius: 4px; }
         canvas { width: 100% !important; height: 400px !important; }
+
+        /* Null-data warning banner */
+        .data-warning {
+            background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;
+            padding: 8px 14px; font-size: 0.82em; color: #856404;
+            display: none; margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
 
     <h1>XRPBurn Analysis Daily</h1>
     <p>Last updated: <span id="last-update">-</span> (SGT)</p>
+
+    <div id="data-warning" class="data-warning"></div>
 
     <div class="controls">
         <button onclick="triggerUpdate()">Update Now</button>
@@ -36,7 +45,7 @@
     </div>
 
     <div class="dot-legend">
-        🔵 Saturday | 🔴 Sunday | 🎈 Simulated Data
+        🔵 Saturday | 🔴 Sunday | 🎈 Simulated / XRPL Unreachable
     </div>
 
     <script>
@@ -46,24 +55,22 @@
 
         const colors = {
             settlement: '#2ca02c',
-            identity: '#9467bd',
-            defi: '#ff7f0e',
-            acct_mgmt: '#7f7f7f',
-            pending: '#a5c8ed'
+            identity:   '#9467bd',
+            defi:       '#ff7f0e',
+            acct_mgmt:  '#7f7f7f',
+            pending:    '#a5c8ed'   // blue "In Progress" bar
         };
 
+        // ── Plugins ──────────────────────────────────────────────────────────
 
-        // PLUGIN: Draw Balloon Icons on Simulated Data
         const fallbackIconPlugin = {
             id: 'fallbackIcon',
             afterDraw: (chart) => {
                 const { ctx, scales: { x, y } } = chart;
-                chart.data.labels.forEach((label, i) => {
-                    // Check if this specific date entry is a fallback
+                chart.data.labels.forEach((label) => {
                     const entry = rawData.find(d => d.date === label);
                     if (entry && entry.is_fallback) {
                         const xPos = x.getPixelForValue(label);
-                        // Place at the top of the chart area
                         ctx.font = '16px serif';
                         ctx.textAlign = 'center';
                         ctx.fillText('🎈', xPos, y.top + 20);
@@ -71,12 +78,12 @@
                 });
             }
         };
-        
+
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: (chart) => {
                 const { ctx, scales: { x } } = chart;
-                chart.data.labels.forEach((label, i) => {
+                chart.data.labels.forEach((label) => {
                     const date = new Date(label);
                     const day = date.getDay();
                     if (day === 6 || day === 0) {
@@ -89,81 +96,253 @@
             }
         };
 
+        // ── Data loading ──────────────────────────────────────────────────────
+
         async function loadData() {
             try {
-                const response = await fetch('data.json');
+                // Cache-bust so GitHub Pages serves the latest data.json
+                const response = await fetch('data.json?v=' + Date.now());
                 rawData = await response.json();
+
                 if (rawData.length > 0) {
-                    const lastEntry = rawData[rawData.length - 1];
-                    document.getElementById('last-update').innerText = lastEntry.last_updated || lastEntry.date;
+                    const last = rawData[rawData.length - 1];
+                    document.getElementById('last-update').innerText =
+                        last.last_updated || last.date;
                 }
+
+                checkDataWarnings();
                 renderCharts();
-            } catch (error) { console.error("Error loading data:", error); }
+            } catch (error) {
+                console.error("Error loading data:", error);
+                document.getElementById('last-update').innerText = 'Error loading data';
+            }
         }
+
+        function checkDataWarnings() {
+            const warningEl = document.getElementById('data-warning');
+            const simulated = rawData.filter(d => d.is_fallback);
+            if (simulated.length > 0) {
+                const dates = simulated.map(d => d.date).join(', ');
+                warningEl.style.display = 'block';
+                warningEl.innerHTML =
+                    `⚠️ <strong>${simulated.length} day(s) contain simulated data</strong>` +
+                    ` (XRPL node was unreachable during scheduled update): <em>${dates}</em>. ` +
+                    `These are marked with 🎈 on the charts.`;
+            } else {
+                warningEl.style.display = 'none';
+            }
+        }
+
+        // ── Chart rendering ───────────────────────────────────────────────────
 
         function renderCharts() {
             const isMonthly = document.getElementById('rollup-toggle').checked;
-            const loadCtx = document.getElementById('loadChart').getContext('2d');
-            const txCtx = document.getElementById('txChart').getContext('2d');
-            
-            if (loadChartInstance) loadChartInstance.destroy();
-            if (txChartInstance) txChartInstance.destroy();
+            let displayData = isMonthly ? rollUpMonthly(rawData) : rawData;
 
-            let displayData = rawData;
             const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
 
-            // --- 1. LOAD CHART ---
+            // Destroy previous instances
+            if (loadChartInstance) loadChartInstance.destroy();
+            if (txChartInstance)   txChartInstance.destroy();
+
+            // ── Load Chart ──
+
             const loadDatasets = catKeys.map(cat => ({
-                label: cat.charAt(0).toUpperCase() + cat.slice(1),
-                data: displayData.map(d => (d.load_categories && Object.keys(d.load_categories).length > 0) ? (d.load_categories[cat] || 0) : 0),
-                backgroundColor: colors[cat], stack: 'Stack 0'
+                label: catLabel(cat),
+                data: displayData.map(d =>
+                    hasCategories(d.load_categories) ? (d.load_categories[cat] || 0) : 0
+                ),
+                backgroundColor: colors[cat],
+                stack: 'Stack 0'
             }));
 
+            // "In Progress" bar covers days where category breakdown is not yet available
             loadDatasets.push({
                 label: 'In Progress',
-                data: displayData.map(d => (!d.load_categories || Object.keys(d.load_categories).length === 0) ? d.load_usd_m : 0),
-                backgroundColor: colors.pending, stack: 'Stack 0'
+                data: displayData.map(d =>
+                    !hasCategories(d.load_categories) ? (d.load_usd_m || 0) : 0
+                ),
+                backgroundColor: colors.pending,
+                stack: 'Stack 0'
             });
 
-            loadChartInstance = new Chart(loadCtx, {
-                type: 'bar',
-                data: {
-                    labels: displayData.map(d => d.date),
-                    datasets: [...loadDatasets, { label: 'Actual XRP Burn', data: displayData.map(d => d.burn_xrp), borderColor: 'red', type: 'line', yAxisID: 'y1' }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true }, y1: { position: 'right', grid: { drawOnChartArea: false } } } },
-                plugins: [weekendDotsPlugin, fallbackIconPlugin]
-            });
+            // Burn line on secondary y-axis — only plot non-null values
+            const burnLine = {
+                label: 'Actual XRP Burn',
+                data: displayData.map(d => d.burn_xrp ?? null),
+                borderColor: 'red',
+                backgroundColor: 'rgba(255,0,0,0.1)',
+                type: 'line',
+                yAxisID: 'y1',
+                spanGaps: false   // gaps where burn is null
+            };
 
-            // --- 2. TRANSACTION CHART ---
+            loadChartInstance = new Chart(
+                document.getElementById('loadChart').getContext('2d'),
+                {
+                    type: 'bar',
+                    data: {
+                        labels: displayData.map(d => d.date),
+                        datasets: [...loadDatasets, burnLine]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        const val = ctx.raw;
+                                        if (val === null || val === undefined) return null;
+                                        return `${ctx.dataset.label}: ${
+                                            ctx.dataset.yAxisID === 'y1'
+                                                ? val + ' XRP'
+                                                : '$' + val.toFixed(2) + 'M'
+                                        }`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x:  { stacked: true },
+                            y:  { stacked: true, title: { display: true, text: 'USD Millions' } },
+                            y1: {
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                title: { display: true, text: 'XRP Burned' }
+                            }
+                        }
+                    },
+                    plugins: [weekendDotsPlugin, fallbackIconPlugin]
+                }
+            );
+
+            // ── TX Chart ──
+
             const txDatasets = catKeys.map(cat => ({
-                label: cat.charAt(0).toUpperCase() + cat.slice(1),
-                data: displayData.map(d => (d.tx_categories && Object.keys(d.tx_categories).length > 0) ? (d.tx_categories[cat] || 0) : 0),
-                backgroundColor: colors[cat], stack: 'Stack 0'
+                label: catLabel(cat),
+                data: displayData.map(d =>
+                    hasCategories(d.tx_categories) ? (d.tx_categories[cat] || 0) : 0
+                ),
+                backgroundColor: colors[cat],
+                stack: 'Stack 0'
             }));
 
             txDatasets.push({
                 label: 'In Progress',
-                data: displayData.map(d => (!d.tx_categories || Object.keys(d.tx_categories).length === 0) ? d.transactions : 0),
-                backgroundColor: colors.pending, stack: 'Stack 0'
+                data: displayData.map(d =>
+                    !hasCategories(d.tx_categories) ? (d.transactions || 0) : 0
+                ),
+                backgroundColor: colors.pending,
+                stack: 'Stack 0'
             });
 
-            txChartInstance = new Chart(txCtx, {
-                type: 'bar',
-                data: { labels: displayData.map(d => d.date), datasets: txDatasets },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } },
-                plugins: [weekendDotsPlugin, fallbackIconPlugin]
+            txChartInstance = new Chart(
+                document.getElementById('txChart').getContext('2d'),
+                {
+                    type: 'bar',
+                    data: {
+                        labels: displayData.map(d => d.date),
+                        datasets: txDatasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        const val = ctx.raw;
+                                        if (!val) return null;
+                                        return `${ctx.dataset.label}: ${val.toFixed(3)}M txs`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true, title: { display: true, text: 'Transactions (Millions)' } }
+                        }
+                    },
+                    plugins: [weekendDotsPlugin, fallbackIconPlugin]
+                }
+            );
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        /**
+         * A category object is "real" only if it exists AND has at least one non-zero value.
+         * Empty {} or all-zero values both trigger the "In Progress" blue bar.
+         */
+        function hasCategories(cats) {
+            return cats &&
+                   typeof cats === 'object' &&
+                   Object.keys(cats).length > 0 &&
+                   Object.values(cats).some(v => v > 0);
+        }
+
+        function catLabel(key) {
+            return { settlement: 'Settlement', identity: 'Identity',
+                     defi: 'DeFi', acct_mgmt: 'Acct Mgmt' }[key] || key;
+        }
+
+        /** Roll up daily entries to monthly averages / sums */
+        function rollUpMonthly(data) {
+            const months = {};
+            data.forEach(d => {
+                const m = d.date.slice(0, 7); // "YYYY-MM"
+                if (!months[m]) months[m] = { entries: [], date: m + '-01', is_fallback: false };
+                months[m].entries.push(d);
+                if (d.is_fallback) months[m].is_fallback = true;
+            });
+
+            return Object.values(months).map(({ entries, date, is_fallback }) => {
+                const n = entries.length;
+                const avg = key => {
+                    const vals = entries.map(e => e[key]).filter(v => v != null);
+                    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                };
+                const sumCat = (field, cat) => {
+                    const vals = entries.map(e => (e[field] || {})[cat] || 0);
+                    return vals.reduce((a, b) => a + b, 0);
+                };
+                const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
+                const hasCat = entries.some(e => hasCategories(e.tx_categories));
+
+                return {
+                    date,
+                    last_updated: date,
+                    burn_xrp:  avg('burn_xrp'),
+                    load_usd_m: avg('load_usd_m'),
+                    transactions: avg('transactions'),
+                    tx_categories: hasCat ? Object.fromEntries(catKeys.map(k => [k, sumCat('tx_categories', k)])) : {},
+                    load_categories: hasCat ? Object.fromEntries(catKeys.map(k => [k, sumCat('load_categories', k)])) : {},
+                    is_fallback
+                };
             });
         }
 
+        // ── GitHub Actions trigger ────────────────────────────────────────────
+
         async function triggerUpdate() {
-            const token = prompt("Enter GitHub Token:");
+            const token = prompt("Enter GitHub Personal Access Token:");
             if (!token) return;
-            const response = await fetch(`https://api.github.com/repos/pintuwang/xrpburn/actions/workflows/daily_update.yml/dispatches`, {
-                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
-                body: JSON.stringify({ ref: 'main' })
-            });
-            if (response.ok) alert("Triggered!");
+            const response = await fetch(
+                `https://api.github.com/repos/pintuwang/xrpburn/actions/workflows/daily_update.yml/dispatches`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify({ ref: 'main' })
+                }
+            );
+            alert(response.ok
+                ? "✅ Update triggered! Check Actions tab for progress."
+                : `❌ Failed (${response.status}). Check your token has 'workflow' scope.`
+            );
         }
 
         window.onload = loadData;
