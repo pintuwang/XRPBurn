@@ -1,15 +1,10 @@
 """
-XRPBurn Data Generator — v4
+XRPBurn Data Generator — v5
 ============================
 - Uses urllib only (no requests needed)
-- Fetches real data from XRPL JSON-RPC (port 443 only)
-- Burn = total_coins delta between days
-- Tx categories sampled from real ledger transactions
-- Never writes fake percentage splits
-- sys.exit(1) on failure so GitHub Actions shows red X
-v4 fix: server_info now checks validated_ledger AND closed_ledger
-        (some nodes return one or the other depending on sync state)
-        Also prints raw ledger info keys for easier future debugging.
+- v5 fix: total_coins fetched via ledger RPC (not server_info)
+  xrplcluster.com omits total_coins from server_info validated_ledger —
+  the ledger method always includes it in the ledger header.
 """
 
 import json
@@ -34,7 +29,7 @@ REQUEST_TIMEOUT     = 30
 
 def fetch_json(url):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/4.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "XRPBurnTracker/5.0"})
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
@@ -52,7 +47,7 @@ def xrpl_rpc(method, params=None):
             req = urllib.request.Request(
                 node, data=payload,
                 headers={"Content-Type": "application/json",
-                         "User-Agent": "XRPBurnTracker/4.0"}
+                         "User-Agent": "XRPBurnTracker/5.0"}
             )
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
                 data = json.loads(r.read().decode())
@@ -66,7 +61,7 @@ def xrpl_rpc(method, params=None):
             print(f"  [HTTP {e.code}] {node}")
         except Exception as e:
             print(f"  [ERR] {node} -> {type(e).__name__}: {e}")
-    print(f"  [FAIL] All XRPL nodes failed for: {method}")
+    print(f"  [FAIL] All nodes failed for: {method}")
     return None
 
 
@@ -82,38 +77,38 @@ def get_xrp_price():
     return None
 
 
-def get_server_info():
+def get_ledger_info():
     """
-    Returns total_coins_xrp and ledger_index.
-    Checks both validated_ledger and closed_ledger — nodes return one or the other
-    depending on their sync state. Prints available keys for debugging.
+    Fetch the validated ledger header directly via the 'ledger' RPC method.
+    This always includes total_coins, unlike server_info on some nodes.
+    Returns: { total_coins_xrp, ledger_index } or None.
     """
-    result = xrpl_rpc("server_info")
+    result = xrpl_rpc("ledger", {
+        "ledger_index":  "validated",
+        "transactions":  False,
+        "expand":        False,
+        "owner_funds":   False,
+    })
     if not result:
         return None
 
-    info = result.get("info", {})
+    # Response can nest the header under 'ledger' or 'ledger_current_index'
+    ledger = result.get("ledger") or result.get("closed", {}).get("ledger", {})
 
-    # Print top-level info keys so we can see what the node returned
-    print(f"  [DEBUG] info keys: {list(info.keys())}")
-
-    # Try validated_ledger first, then closed_ledger as fallback
-    vl = info.get("validated_ledger") or info.get("closed_ledger")
-
-    if not vl:
-        print(f"  [WARN] Neither validated_ledger nor closed_ledger found in server_info")
-        print(f"  [DEBUG] Full info: {json.dumps(info, indent=2)[:800]}")
+    if not ledger:
+        print(f"  [WARN] ledger RPC returned no ledger object. Keys: {list(result.keys())}")
         return None
 
-    print(f"  [DEBUG] ledger keys: {list(vl.keys())}")
+    print(f"  [DEBUG] ledger header keys: {list(ledger.keys())}")
 
-    raw_coins = vl.get("total_coins")
+    raw_coins = ledger.get("total_coins")
     if not raw_coins:
-        print(f"  [WARN] total_coins missing from ledger info: {vl}")
+        print(f"  [WARN] total_coins still missing. Full header: {ledger}")
         return None
 
     total_coins_xrp = int(raw_coins) / 1_000_000
-    ledger_index    = int(vl.get("seq", 0))
+    ledger_index    = int(ledger.get("ledger_index") or ledger.get("seqNum") or
+                          result.get("ledger_index", 0))
 
     print(f"  [OK]  total_coins = {total_coins_xrp:,.4f} XRP  |  ledger #{ledger_index}")
     return {"total_coins_xrp": total_coins_xrp, "ledger_index": ledger_index}
@@ -180,14 +175,14 @@ def get_real_metrics(previous_total_coins=None):
     print("\n--- Fetching XRP price ---")
     xrp_price = get_xrp_price() or 2.30
 
-    print("\n--- Fetching XRPL server_info ---")
-    server = get_server_info()
-    if not server:
-        print("\n[CRITICAL] Could not get server_info — marking as simulated.")
+    print("\n--- Fetching validated ledger header ---")
+    ledger_info = get_ledger_info()
+    if not ledger_info:
+        print("\n[CRITICAL] Cannot get ledger data — marking as simulated.")
         return None, None, None, {}, {}, True, None
 
-    current_total_coins = server["total_coins_xrp"]
-    current_ledger      = server["ledger_index"]
+    current_total_coins = ledger_info["total_coins_xrp"]
+    current_ledger      = ledger_info["ledger_index"]
 
     if previous_total_coins and previous_total_coins > current_total_coins:
         burn_xrp = round(previous_total_coins - current_total_coins, 6)
@@ -196,7 +191,7 @@ def get_real_metrics(previous_total_coins=None):
         burn_xrp = None
         print("\n  No valid previous total_coins — burn estimated from fees.")
 
-    print("\n--- Sampling ledgers ---")
+    print("\n--- Sampling ledgers for tx classification ---")
     tx_counts_raw, payment_vol_sampled, fee_drops_sampled, ledgers_ok = \
         sample_ledgers(current_ledger)
 
