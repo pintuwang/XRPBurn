@@ -9,9 +9,9 @@ import pytz
 
 # Configuration
 XRPL_NODES = ["https://xrplcluster.com", "https://xrpl.ws", "https://s2.ripple.com"]
-SAMPLE_LEDGER_COUNT = 150  # Increased for better statistical stability
+SAMPLE_LEDGER_COUNT = 150  # Increased for statistical stability
 LEDGERS_PER_DAY = 25000
-MAX_PAYMENT_XRP = 10_000_000  # Cap at 10M XRP to filter internal shuffles
+MAX_PAYMENT_XRP = 10_000_000  # Cap to filter whale shuffles
 REQUEST_TIMEOUT = 30
 
 def fetch_json(url):
@@ -25,7 +25,8 @@ def xrpl_rpc(method, params=None):
     payload = json.dumps({"method": method, "params": [params or {}]}).encode()
     for node in XRPL_NODES:
         try:
-            req = urllib.request.Request(node, data=payload, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(node, data=payload, 
+                                          headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
                 data = json.loads(r.read().decode())
             if data.get("result", {}).get("status") == "success":
@@ -80,7 +81,7 @@ def get_real_metrics(prev_entry):
     if prev_entry and prev_entry.get("total_coins_xrp"):
         days_diff = (datetime.now() - datetime.strptime(prev_entry["date"], "%Y-%m-%d")).days
         total_burn = float(prev_entry["total_coins_xrp"]) - info["coins"]
-        burn_xrp = round(total_burn / max(1, days_diff), 6)
+        burn_xrp = round(total_burn / max(1, days_diff), 6) # Average burn over missing days
 
     # Sampling
     counts, payment_amts, ledgers_ok = sample_ledgers(info["seq"])
@@ -93,9 +94,10 @@ def get_real_metrics(prev_entry):
     total_tx_m = round(total_sampled * scale / 1e6, 4)
     tx_cats = {k: round(v * scale / 1e6, 4) for k, v in counts.items()}
 
-    # Median Method for Load
+    # Median Method for Load to filter whales
     payment_amts.sort()
     median_val = payment_amts[len(payment_amts)//2] if payment_amts else 0
+    # FIX: Ensure load is in Millions
     load_usd_m = round((median_val * (counts["settlement"] * scale) * xrp_price) / 1e6, 2)
     load_cats = {k: round(load_usd_m * (v / total_sampled), 2) for k, v in counts.items()}
 
@@ -112,7 +114,8 @@ def update_data():
             try: data = json.load(f)
             except: data = []
 
-    prev = next((e for e in reversed(data) if e["date"] != date_str), None)
+    # Find last valid entry with coins to calculate burn
+    prev = next((e for e in reversed(data) if e["date"] != date_str and e.get("total_coins_xrp")), None)
     burn, load, tx, tx_cats, load_cats, is_sim, coins = get_real_metrics(prev)
 
     new_entry = {
