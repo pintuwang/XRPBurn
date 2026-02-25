@@ -1,23 +1,31 @@
 name: Daily XRPBurn Update
+
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:   # manual trigger from Actions tab
   schedule:
-    # This runs at the top of every hour (00:00, 01:00, etc.)
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'   # top of every hour
+
+# ── CRITICAL: grant write access so the bot can push data.json ──────────────
+permissions:
+  contents: write
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          # Use the token explicitly so authenticated pushes work
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so rebase has context
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: pip install pytz
@@ -25,13 +33,23 @@ jobs:
       - name: Run Data Script
         run: python generate_data.py
 
-      - name: Commit and Push Changes
+      - name: Commit and Push data.json
         run: |
-          git config --global user.name "github-actions[bot]"
+          git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only data.json — never accidentally commit other changes
           git add data.json
-          git commit -m "Update daily XRP burn data [skip ci]" || echo "No changes to commit"
-          # Pull latest changes and rebase your local commit on top of them
+
+          # Only proceed if data.json actually changed
+          if git diff --cached --quiet; then
+            echo "No changes to data.json — skipping commit."
+            exit 0
+          fi
+
+          git commit -m "chore: update XRP burn data $(date -u +'%Y-%m-%d %H:%M UTC') [skip ci]"
+
+          # Pull with rebase BEFORE pushing to handle any concurrent runs gracefully
           git pull --rebase origin main
-          git push
-     
+
+          git push origin main
