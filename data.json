@@ -33,13 +33,13 @@
     },
     {
         "date": "2026-02-25",
-        "last_updated": "2026-02-25 07:35:26",
+        "last_updated": "2026-02-25 10:12:06",
         "burn_xrp": null,
         "load_usd_m": null,
         "transactions": null,
         "tx_categories": {},
         "load_categories": {},
-        "is_fallback": false,
+        "is_fallback": true,
         "total_coins_xrp": null
     }
 ]
