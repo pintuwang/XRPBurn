@@ -382,9 +382,12 @@
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (!ctx.raw) return null;
                         const e = displayData[ctx.dataIndex];
-                        const suffix = e && e.is_partial
-                            ? ` (partial — as of ${e.partial_as_of} SGT)` : '';
-                        return `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs${suffix}`;
+                        if (e && e.is_partial) {
+                            const proj = e.projected_tx_m
+                                ? `  |  projected full day: ${e.projected_tx_m.toFixed(2)}M` : '';
+                            return `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs actual (since 00:00 SGT, as of ${e.partial_as_of})${proj}`;
+                        }
+                        return `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs (full day)`;
                     }}}},
                     scales: {
                         x: { stacked: true },
