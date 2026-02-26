@@ -193,22 +193,18 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
         return None, 0, 0
 
     props = {k: v / total for k, v in counts.items()}
-    scale = 25_000 / ok
 
-    # Cap avg tx/ledger at 130 to prevent burst-window inflation
-    # XRPL reality: median ~80-110 tx/ledger, hard ceiling ~200 during spam
-    # Uncapped: a 180 tx/ledger sample × 625 = 4.5M (wrong)
-    # Capped:   min(180, 130) × 625 = 2.03M still high but bounded
-    # Better: use capped avg × 25,000 directly
     avg_tx_per_ledger = total / ok
-    REALISTIC_MAX_TX_PER_LEDGER = 120   # conservative ceiling
-    capped_avg = min(avg_tx_per_ledger, REALISTIC_MAX_TX_PER_LEDGER)
-    total_tx_m = round(capped_avg * ledgers_per_day / 1_000_000, 4)
+    REALISTIC_MAX = 120   # cap: prevents burst-window inflation
+    capped_avg = min(avg_tx_per_ledger, REALISTIC_MAX)
+
+    # Full-day projection (used for complete days)
+    projected_tx_m = round(capped_avg * ledgers_per_day / 1_000_000, 4)
 
     print(f"  {ok} ledgers | {total} txs | avg={avg_tx_per_ledger:.0f}/ledger "
-          f"(capped to {capped_avg:.0f}) | est {total_tx_m:.3f}M/day")
+          f"(capped={capped_avg:.0f}) | projected={projected_tx_m:.3f}M/day")
     print("  " + " | ".join(f"{k}={v*100:.1f}%" for k, v in props.items()))
-    return props, total_tx_m, ok
+    return props, projected_tx_m, capped_avg, ok
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -274,7 +270,20 @@ def update_data():
         print(f"\n  Using fallback ledgers/day = {real_lpd:,}")
 
     print("\n--- Categories ---")
-    props, total_tx_m, ledgers_ok = get_categories(current["seq"], real_lpd)
+    props, projected_tx_m, capped_avg_per_ledger, ledgers_ok = get_categories(current["seq"], real_lpd)
+
+    # TX COUNT:
+    # Partial day  → actual count since midnight (grows through the day, honest)
+    # Complete day → full-day projection (best estimate at 23:30+)
+    if is_partial and midnight_seq:
+        ledgers_since_midnight = current["seq"] - midnight_seq
+        actual_tx_m = round(capped_avg_per_ledger * ledgers_since_midnight / 1_000_000, 4)
+        total_tx_m  = actual_tx_m
+        print(f"  PARTIAL: {ledgers_since_midnight:,} ledgers since midnight × "
+              f"{capped_avg_per_ledger:.0f} avg = {actual_tx_m:.3f}M actual so far")
+    else:
+        total_tx_m = projected_tx_m
+        print(f"  COMPLETE: using projected {projected_tx_m:.3f}M/day")
 
     # Burn — coin delta only, never fee estimate
     burn_xrp = None
@@ -297,18 +306,19 @@ def update_data():
     print(f"  burn={burn_xrp} XRP | load=${load_usd_m}M | tx={total_tx_m}M")
 
     entry = {
-        "date":            date_str,
-        "last_updated":    timestamp_str,
-        "open_coins_xrp":  midnight_coins if midnight_coins else cached_open,
-        "total_coins_xrp": current["coins"],
-        "burn_xrp":        burn_xrp,
-        "load_usd_m":      load_usd_m,
-        "transactions":    total_tx_m,
-        "tx_categories":   tx_cats,
-        "load_categories": load_cats,
-        "is_fallback":     False,
-        "is_partial":      is_partial,
-        "partial_as_of":   time_str if is_partial else None,
+        "date":              date_str,
+        "last_updated":      timestamp_str,
+        "open_coins_xrp":    midnight_coins if midnight_coins else cached_open,
+        "total_coins_xrp":   current["coins"],
+        "burn_xrp":          burn_xrp,
+        "load_usd_m":        load_usd_m,
+        "transactions":      total_tx_m,       # actual so far (partial) or projected (complete)
+        "projected_tx_m":    projected_tx_m,   # always full-day projection for reference
+        "tx_categories":     tx_cats,
+        "load_categories":   load_cats,
+        "is_fallback":       False,
+        "is_partial":        is_partial,
+        "partial_as_of":     time_str if is_partial else None,
     }
 
     data = [e for e in data if e.get("date") != date_str]
