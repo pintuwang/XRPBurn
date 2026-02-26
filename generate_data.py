@@ -87,9 +87,9 @@ def get_midnight_coins(cur_seq, cur_t, midnight_utc, cached=None):
         cur_now = info["coins"] if info else None
         if cur_now and 0 < (cached - cur_now) < 5000:
             print(f"  Using cached: {cached:,.4f} XRP (delta={cached-cur_now:.4f})")
-            return cached
+            return cached, None, None
         else:
-            print(f"  Cached value {cached} invalid vs current {cur_now} — re-searching")
+            print(f"  Cached {cached} invalid vs current {cur_now} — re-searching")
 
     # Binary search
     diff_s  = (midnight_utc - cur_t).total_seconds()
@@ -117,20 +117,20 @@ def get_midnight_coins(cur_seq, cur_t, midnight_utc, cached=None):
         est_seq += corr
 
     if best and best["coins"]:
-        print(f"  ✓ Midnight coins: {best['coins']:,.4f} XRP")
-        return best["coins"]
+        print(f"  ✓ Midnight ledger #{best['seq']:,} | coins={best['coins']:,.4f} XRP")
+        return best["coins"], best["seq"], best["t"]
 
     # Fallback: ~24h ago
     print("  Binary search failed — trying ledger 25,000 back (~24h)")
     fb = parse(rpc("ledger", {"ledger_index": cur_seq - 25_000, "transactions": False}))
     if fb and fb["coins"]:
         hrs = (cur_t - fb["t"]).total_seconds() / 3600 if fb["t"] else None
-        print(f"  ✓ Fallback coins: {fb['coins']:,.4f} XRP "
+        print(f"  ✓ Fallback #{fb['seq']:,} | {fb['coins']:,.4f} XRP "
               f"({hrs:.1f}h ago)" if hrs else f"  ✓ Fallback: {fb['coins']:,.4f} XRP")
-        return fb["coins"]
+        return fb["coins"], fb["seq"], fb["t"]
 
     print("  [FAIL] Could not find midnight baseline — burn will be null")
-    return None
+    return None, None, None
 
 
 # ── Step 3: CoinGecko ────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ def classify(t):
     return "acct_mgmt"
 
 
-def get_categories(cur_seq):
+def get_categories(cur_seq, ledgers_per_day=17_500):
     counts = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
     ok = 0
     print(f"  Sampling {SAMPLE_N} ledgers from #{cur_seq:,}")
@@ -194,8 +194,19 @@ def get_categories(cur_seq):
 
     props = {k: v / total for k, v in counts.items()}
     scale = 25_000 / ok
-    total_tx_m = round(total * scale / 1_000_000, 4)
-    print(f"  {ok} ledgers | {total} txs | scale={scale:.0f} | est {total_tx_m:.3f}M/day")
+
+    # Cap avg tx/ledger at 130 to prevent burst-window inflation
+    # XRPL reality: median ~80-110 tx/ledger, hard ceiling ~200 during spam
+    # Uncapped: a 180 tx/ledger sample × 625 = 4.5M (wrong)
+    # Capped:   min(180, 130) × 625 = 2.03M still high but bounded
+    # Better: use capped avg × 25,000 directly
+    avg_tx_per_ledger = total / ok
+    REALISTIC_MAX_TX_PER_LEDGER = 120   # conservative ceiling
+    capped_avg = min(avg_tx_per_ledger, REALISTIC_MAX_TX_PER_LEDGER)
+    total_tx_m = round(capped_avg * ledgers_per_day / 1_000_000, 4)
+
+    print(f"  {ok} ledgers | {total} txs | avg={avg_tx_per_ledger:.0f}/ledger "
+          f"(capped to {capped_avg:.0f}) | est {total_tx_m:.3f}M/day")
     print("  " + " | ".join(f"{k}={v*100:.1f}%" for k, v in props.items()))
     return props, total_tx_m, ok
 
@@ -241,7 +252,7 @@ def update_data():
         sys.exit(1)
 
     print("\n--- Midnight ledger ---")
-    midnight_coins = get_midnight_coins(
+    midnight_coins, midnight_seq, midnight_time = get_midnight_coins(
         current["seq"], current["t"], midnight_utc, cached_open
     )
 
@@ -249,8 +260,21 @@ def update_data():
     xrp_price, vol_usd = get_price_vol()
     xrp_price = xrp_price or 2.30
 
+    # Compute real ledgers/day from actual window (no assumption needed)
+    from datetime import timezone as _tz
+    now_utc = datetime.now(_tz.utc)
+    if midnight_time and midnight_seq:
+        elapsed_hours    = (now_utc - midnight_time).total_seconds() / 3600
+        ledgers_in_window = current["seq"] - midnight_seq
+        real_lpd = int(ledgers_in_window * 24 / elapsed_hours) if elapsed_hours > 0 else 17_500
+        print(f"\n  Real ledgers/day = {ledgers_in_window:,} ledgers in "
+              f"{elapsed_hours:.2f}h × 24 = {real_lpd:,}")
+    else:
+        real_lpd = 17_500   # fallback only if midnight_seq unavailable
+        print(f"\n  Using fallback ledgers/day = {real_lpd:,}")
+
     print("\n--- Categories ---")
-    props, total_tx_m, ledgers_ok = get_categories(current["seq"])
+    props, total_tx_m, ledgers_ok = get_categories(current["seq"], real_lpd)
 
     # Burn — coin delta only, never fee estimate
     burn_xrp = None
