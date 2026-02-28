@@ -115,5 +115,30 @@
         "is_fallback": false,
         "is_partial": true,
         "partial_as_of": "23:26"
+    },
+    {
+        "date": "2026-03-01",
+        "last_updated": "2026-03-01 00:30:23",
+        "open_coins_xrp": 99985702284.5867,
+        "total_coins_xrp": 99985702271.52512,
+        "burn_xrp": 13.061584,
+        "load_usd_m": 3665.99,
+        "transactions": 0.0431,
+        "projected_tx_m": 2.0628,
+        "tx_categories": {
+            "settlement": 0.017,
+            "identity": 0.0,
+            "defi": 0.0184,
+            "acct_mgmt": 0.0077
+        },
+        "load_categories": {
+            "settlement": 1450.22,
+            "identity": 0.0,
+            "defi": 1562.68,
+            "acct_mgmt": 653.09
+        },
+        "is_fallback": false,
+        "is_partial": true,
+        "partial_as_of": "00:30"
     }
 ]
