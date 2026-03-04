@@ -715,6 +715,22 @@
                 },
                 plugins: [weekendDotsPlugin, partialHatchPlugin]
             });
+
+            // XRPL% progress bar (uses displayData which is in scope here)
+            const lastEntry = displayData[displayData.length - 1];
+            const pctEl = document.getElementById('rlusd-pct-bar');
+            if (pctEl && lastEntry && lastEntry.rlusd_xrpl_m && lastEntry.rlusd_total_m) {
+                const xpct  = (lastEntry.rlusd_xrpl_m / lastEntry.rlusd_total_m * 100).toFixed(1);
+                const hit25 = parseFloat(xpct) >= 25;
+                pctEl.innerHTML = `
+                    <strong>XRPL share of RLUSD: ${xpct}%</strong>
+                    ${hit25
+                        ? '<span style="color:#16a34a;font-weight:bold"> 🎯 25% milestone reached!</span>'
+                        : '<span style="color:#888"> (watch for 25% — institutional bridging signal)</span>'}
+                    <div style="margin-top:4px;background:#e5e7eb;border-radius:4px;height:8px;width:100%;max-width:400px">
+                        <div style="background:${hit25 ? '#16a34a' : '#346beb'};width:${Math.min(xpct,100)}%;height:8px;border-radius:4px"></div>
+                    </div>`;
+            }
         }
 
         // ── RWA Iceberg Chart ─────────────────────────────────────────────────────
@@ -941,20 +957,10 @@
                 amendEl.textContent  = 'XLS-66 Native Lending';
                 amendNote.textContent = amends.length ? 'See amendment chart below' : 'Data pending';
             }
-            // XRPL% indicator below RLUSD chart
-            const lastEntry = displayData[displayData.length - 1];
-            const pctEl = document.getElementById('rlusd-pct-bar');
-            if (pctEl && lastEntry && lastEntry.rlusd_xrpl_m && lastEntry.rlusd_total_m) {
-                const xpct = (lastEntry.rlusd_xrpl_m / lastEntry.rlusd_total_m * 100).toFixed(1);
-                const hit25 = parseFloat(xpct) >= 25;
-                pctEl.innerHTML = `
-                    <strong>XRPL share of RLUSD: ${xpct}%</strong>
-                    ${hit25 ? '<span style="color:#16a34a;font-weight:bold"> 🎯 25% milestone reached!</span>' : `<span style="color:#888"> (watch for 25% — institutional bridging signal)</span>`}
-                    <div style="margin-top:4px;background:#e5e7eb;border-radius:4px;height:8px;width:100%;max-width:400px">
-                        <div style="background:${hit25?'#16a34a':'#346beb'};width:${Math.min(xpct,100)}%;height:8px;border-radius:4px"></div>
-                    </div>`;
-            }
+        }
 
+        function updateRlusdPctBar() {
+            // Called from renderRlusdChart where displayData is in scope — see below
         }
 
         // ── Monthly rollup ────────────────────────────────────────────────────
