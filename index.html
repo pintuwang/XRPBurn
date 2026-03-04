@@ -16,8 +16,8 @@
         #loadChart { height: 380px !important; }
         #burnChart { height: 160px !important; }
         #txChart   { height: 380px !important; }
-        #rwaChart  { height: 380px !important; }
         #rlusdChart{ height: 280px !important; }
+        #rwaIcebergChart { height: 220px !important; }
         .view-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
         .view-toggle button {
             padding: 4px 12px; font-size: 0.82em; cursor: pointer;
@@ -115,31 +115,13 @@
     </div>
 
     <div class="chart-wrapper">
-        <h3>RWA on XRPL — Total Value (USD Millions)
-            <span style="font-size:0.65em;color:#888;font-weight:normal;margin-left:8px">
-                ⚠ Approximate — automated from on-chain gateway balances
-            </span>
-        </h3>
-        <p class="chart-subtitle">
-            Total value of tokenised real-world assets issued on XRPL, sourced from gateway_balances
-            of known RWA issuers. Update the RWA_REGISTRY in generate_data.py to add new projects.
-        </p>
-        <div class="view-toggle">
-            <button id="rwa-btn-type"     class="active" onclick="setRwaView('type')">By Asset Type</button>
-            <button id="rwa-btn-issuer"   onclick="setRwaView('issuer')">By Issuer</button>
-            <button id="rwa-btn-geo"      onclick="setRwaView('geography')">By Geography</button>
-        </div>
-        <canvas id="rwaChart"></canvas>
-    </div>
-
-    <div class="chart-wrapper">
         <h3>RWA Iceberg — Distributed vs Represented Value</h3>
         <p class="chart-subtitle">
             Source: rwa.xyz. <strong>Distributed</strong> = publicly tradable active liquidity on the XRPL DEX.
             <strong>Represented</strong> = total institutional tokenized value including private/restricted assets.
             The gap is the "institutional iceberg" — value locked in permissioned pools.
         </p>
-        <canvas id="rwaIcebergChart" style="height:200px !important;"></canvas>
+        <canvas id="rwaIcebergChart"></canvas>
     </div>
 
     <div class="chart-wrapper">
@@ -163,7 +145,6 @@
         let loadChartInst     = null;
         let burnChartInst     = null;
         let txChartInst       = null;
-        let rwaChartInst      = null;
         let rlusdChartInst    = null;
         let rwaIcebergInst    = null;
         let rwaView           = 'type';
@@ -310,14 +291,19 @@
                 const { ctx, scales: { x } } = chart;
                 if (!x) return;
                 chart.data.labels.forEach(label => {
-                    // Parse YYYY-MM-DD directly to avoid UTC midnight timezone shift
-                    const parts = label.split('-');
-                    const day = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
+                    // Parse YYYY-MM-DD without UTC offset (local date)
+                    const [y, m, d] = label.split('-').map(Number);
+                    const day = new Date(y, m - 1, d).getDay();
                     if (day === 6 || day === 0) {
+                        const xPos = x.getPixelForValue(label);
+                        // Draw dot just inside the bottom of the chart canvas
+                        const yPos = chart.canvas.height - 10;
+                        ctx.save();
                         ctx.fillStyle = day === 6 ? '#1f77b4' : '#d62728';
                         ctx.beginPath();
-                        ctx.arc(x.getPixelForValue(label), x.bottom + 14, 4, 0, 2*Math.PI);
+                        ctx.arc(xPos, yPos, 4, 0, 2 * Math.PI);
                         ctx.fill();
+                        ctx.restore();
                     }
                 });
             }
@@ -325,18 +311,6 @@
 
         // ── Load data ─────────────────────────────────────────────────────────
 
-        function setRwaView(view) {
-            rwaView = view;
-            ['type','issuer','geography'].forEach(v => {
-                const btn = document.getElementById('rwa-btn-' + v);
-                if (btn) btn.classList.toggle('active', v === view);
-            });
-            const isMonthly = document.getElementById('rollup-toggle').checked;
-            const showPartial = document.getElementById('partial-toggle').checked;
-            let data = isMonthly ? rollUpMonthly(rawData) : rawData;
-            if (!showPartial) data = data.filter(d => !d.is_partial);
-            renderRwaChart(data);
-        }
 
         async function loadData() {
             try {
@@ -395,7 +369,6 @@
             if (loadChartInst)      loadChartInst.destroy();
             if (burnChartInst)      burnChartInst.destroy();
             if (txChartInst)        txChartInst.destroy();
-            if (rwaChartInst)       rwaChartInst.destroy();
             if (rlusdChartInst)     rlusdChartInst.destroy();
             if (rwaIcebergInst)     rwaIcebergInst.destroy();
 
@@ -423,6 +396,7 @@
                 data: { labels, datasets: loadDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 14 } },
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (ctx.raw == null || ctx.raw === 0) return null;
                         const e = displayData[ctx.dataIndex];
@@ -460,6 +434,7 @@
                 }]},
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 14 } },
                     plugins: {
                         legend: { display: false },
                         tooltip: { callbacks: { label: ctx => {
@@ -506,6 +481,7 @@
                 data: { labels, datasets: txDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 14 } },
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (!ctx.raw) return null;
                         const e = displayData[ctx.dataIndex];
@@ -525,92 +501,11 @@
                 plugins: [weekendDotsPlugin, fallbackIconPlugin, partialHatchPlugin]
             });
 
-            renderRwaChart(displayData);
             renderRwaIcebergChart(displayData);
             renderRlusdChart(displayData);
             updateBriefingCard();
         }
 
-        // ── RWA Chart ─────────────────────────────────────────────────────────────
-
-        const RWA_TYPE_COLORS = {
-            bonds:       '#1a6fa8',
-            fund:        '#40a0d0',
-            real_estate: '#8fbc4a',
-            commodities: '#c7a832',
-            equities:    '#e8612a',
-            other:       '#aaaaaa',
-        };
-        const RWA_TYPE_LABELS = {
-            bonds: 'Bonds / T-Bills', fund: 'Funds / MMFs',
-            real_estate: 'Real Estate', commodities: 'Commodities',
-            equities: 'Equities', other: 'Other'
-        };
-
-        function renderRwaChart(displayData) {
-            if (rwaChartInst) rwaChartInst.destroy();
-            const labels = displayData.map(d => d.date);
-            const field  = rwaView === 'type'      ? 'rwa_by_type'
-                         : rwaView === 'issuer'    ? 'rwa_by_issuer'
-                         :                          'rwa_by_geography';
-
-            // Collect all unique keys across all days
-            const allKeys = [...new Set(
-                displayData.flatMap(d => Object.keys(d[field] || {}))
-            )];
-
-            if (allKeys.length === 0) {
-                // No data — show empty state
-                const ctx2 = document.getElementById('rwaChart').getContext('2d');
-                ctx2.clearRect(0, 0, ctx2.canvas.width, ctx2.canvas.height);
-                ctx2.font = '14px sans-serif';
-                ctx2.fillStyle = '#888';
-                ctx2.textAlign = 'center';
-                ctx2.fillText(
-                    '⚠ No RWA data yet — update RWA_REGISTRY issuer addresses in generate_data.py',
-                    ctx2.canvas.width / 2, 80
-                );
-                return;
-            }
-
-            const datasets = allKeys.map((key, idx) => {
-                const color = rwaView === 'type'
-                    ? (RWA_TYPE_COLORS[key] || COLORS.rwa_other)
-                    : paletteColor(idx);
-                const label = rwaView === 'type'
-                    ? (RWA_TYPE_LABELS[key] || key) : key;
-                return {
-                    label,
-                    data: displayData.map(d => (d[field] || {})[key] || 0),
-                    backgroundColor: displayData.map(d => withAlpha(color, barAlpha(d))),
-                    stack: 'rwa'
-                };
-            });
-
-            rwaChartInst = new Chart(
-                document.getElementById('rwaChart').getContext('2d'), {
-                type: 'bar',
-                data: { labels, datasets },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { tooltip: { callbacks: { label: ctx => {
-                        if (!ctx.raw) return null;
-                        const e = displayData[ctx.dataIndex];
-                        const suffix = isActivePartial(e)
-                            ? ` (partial as of ${e.partial_as_of} SGT)` : '';
-                        return `${ctx.dataset.label}: $${Number(ctx.raw).toFixed(2)}M${suffix}`;
-                    }}}},
-                    scales: {
-                        x: { stacked: true },
-                        y: { stacked: true,
-                             title: { display: true, text: 'USD Millions' },
-                             ticks: { callback: v =>
-                                 v >= 1000 ? '$'+(v/1000).toFixed(1)+'B' : '$'+v+'M' }}
-                    }
-                },
-                plugins: [weekendDotsPlugin, partialHatchPlugin]
-            });
-        }
 
         // ── RLUSD Chart ───────────────────────────────────────────────────────────
 
@@ -673,6 +568,7 @@
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 14 } },
                     plugins: {
                         tooltip: { callbacks: { label: ctx => {
                             if (ctx.raw == null) return null;
@@ -752,6 +648,7 @@
                 ]},
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 14 } },
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (!ctx.raw) return null;
                         const e = displayData[ctx.dataIndex];
