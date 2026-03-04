@@ -20,6 +20,101 @@ RIPPLE_EPOCH    = 946684800
 COMPLETE_HOUR   = 23
 COMPLETE_MIN    = 30
 
+# ── RLUSD Config ─────────────────────────────────────────────────────────────
+# ✅ CONFIRMED via official Ripple docs (docs.ripple.com) and xrpscan.com
+RLUSD_ISSUER_XRPL  = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
+RLUSD_CURRENCY_HEX = "524C555344000000000000000000000000000000"  # hex for "RLUSD"
+RLUSD_COINGECKO_ID = "ripple-usd"
+
+# ── RWA Registry ─────────────────────────────────────────────────────────────
+# Status key:
+#   "confirmed"  = issuer address verified from on-chain/official sources
+#   "discover"   = no confirmed address; script will auto-discover via XRPSCAN API
+#   "skip"       = known to exist but no public issuer address available yet
+#
+# To look up an address manually:
+#   1. Visit https://xrpscan.com and search the currency code (e.g. "TBILL")
+#   2. Find the verified/labelled issuer account
+#   3. Copy the address into "issuer" and change status to "confirmed"
+#
+# Based on rwa.xyz data (Mar 4 2026), top XRPL RWA platforms by value:
+#   Ondo ~$160M | CRX Digital Assets ~$106M | Zeconomy ~$70M
+#   Braza Crypto ~$67M | Archax ~$63M | OpenEden ~$62M | SG-Forge ~$12M
+#
+# price_usd: fixed USD price per token.
+#   Use 1.0 for $1-pegged tokens (T-bills priced ~$1, MMFs ~$1, stablecoins)
+#   Use None for float-priced tokens (script will try DEX price lookup)
+
+RWA_REGISTRY = [
+    # ── OpenEden TBILL (SG, bonds) ────────────────────────────────────────────
+    # Launched Aug 2024 on XRPL. Currency is 4-char "TBILL" (or hex variant).
+    # Ripple invested $10M. ~$62M on XRPL as of Mar 2026.
+    {   "name":       "OpenEden TBILL",
+        "currency":   "5442494C4C000000000000000000000000000000",  # hex "TBILL"
+        "currency_alt": "TBILL",   # fallback short code
+        "status":     "discover",  # auto-lookup issuer via XRPSCAN
+        "asset_type": "bonds",
+        "geography":  "SG",
+        "price_usd":  1.0 },
+
+    # ── Ondo OUSG (US, bonds) ────────────────────────────────────────────────
+    # Launched Jun 2025 on XRPL. ~$160M as of Mar 2026.
+    {   "name":       "Ondo OUSG",
+        "currency":   "4F555347000000000000000000000000000000000",  # hex "OUSG"
+        "currency_alt": "OUSG",
+        "status":     "discover",
+        "asset_type": "bonds",
+        "geography":  "US",
+        "price_usd":  1.0 },
+
+    # ── Archax / abrdn Lux Fund (UK, fund) ───────────────────────────────────
+    # First tokenized MMF on XRPL, launched Nov 2024. ~$63M as of Mar 2026.
+    # Currency codes may be LUX, HHIF, or a hex variant — discover tries all.
+    {   "name":       "Archax abrdn Lux",
+        "currency":   "4C555800000000000000000000000000000000000",   # hex "LUX"
+        "currency_alt": "LUX",
+        "status":     "discover",
+        "asset_type": "fund",
+        "geography":  "UK",
+        "price_usd":  1.0 },
+    {   "name":       "Archax HHIF",
+        "currency":   "HHIF",
+        "currency_alt": "HHIF",
+        "status":     "discover",
+        "asset_type": "fund",
+        "geography":  "UK",
+        "price_usd":  1.0 },
+
+    # ── SG-FORGE EURCV (France, stablecoin/bonds) ────────────────────────────
+    # Launched on XRPL 2025 as 3rd chain after ETH and Solana. ~$12M Mar 2026.
+    # EUR-pegged, so USD value = amount × EUR/USD rate (use 1.08 as proxy)
+    {   "name":       "SG-Forge EURCV",
+        "currency":   "455552435600000000000000000000000000000000", # hex "EURCV"
+        "currency_alt": "EURCV",
+        "status":     "discover",
+        "asset_type": "bonds",
+        "geography":  "FR",
+        "price_usd":  1.08 },  # approximate EUR/USD — close enough for trend tracking
+
+    # ── Braza BBRL (Brazil, stablecoin) ──────────────────────────────────────
+    # BRL-pegged stablecoin on XRPL. ~$67M as of Mar 2026.
+    # BRL ≈ 0.178 USD as of early 2026
+    {   "name":       "Braza BBRL",
+        "currency":   "4242524C000000000000000000000000000000000",  # hex "BBRL"
+        "currency_alt": "BBRL",
+        "status":     "discover",
+        "asset_type": "bonds",
+        "geography":  "BR",
+        "price_usd":  0.178 },  # approximate BRL/USD
+
+    # ── Zeconomy (Unknown) ───────────────────────────────────────────────────
+    # ~$70M on rwa.xyz but no public info on currency code — skip for now.
+    # When you know the currency code, add it here with status "discover".
+
+    # ── CRX Digital Assets (Unknown) ────────────────────────────────────────
+    # 7 assets totalling ~$106M. Currency codes not publicly known — skip.
+]
+
 
 # ── Network ─────────────────────────────────────────────────────────────────
 
@@ -207,7 +302,161 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
     return props, projected_tx_m, capped_avg, ok
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# ── Step 5: RWA data ─────────────────────────────────────────────────────────
+
+def xrpscan_token_lookup(currency_code):
+    """
+    Query XRPSCAN public API to find the top verified issuer for a currency code.
+    Returns issuer address string or None.
+    XRPSCAN API: https://api.xrpscan.com/api/v1/token/{CURRENCY}
+    """
+    for code in [currency_code]:
+        try:
+            url = f"https://api.xrpscan.com/api/v1/token/{code}"
+            req = urllib.request.Request(url, headers={"User-Agent": "XRPBurn/11"})
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                data = json.loads(r.read().decode())
+            # API may return a list of tokens with that currency code
+            if isinstance(data, list) and data:
+                # Prefer trust_level=3 (verified) or highest supply
+                verified = [t for t in data if t.get("meta", {}).get("token", {}).get("trust_level", 0) >= 2]
+                pool = verified if verified else data
+                best = max(pool, key=lambda t: float(t.get("supply", 0) or 0))
+                issuer = best.get("issuer")
+                if issuer:
+                    print(f"  [XRPSCAN] {code} → issuer={issuer} supply={best.get('supply')}")
+                    return issuer
+            elif isinstance(data, dict) and data.get("issuer"):
+                issuer = data["issuer"]
+                print(f"  [XRPSCAN] {code} → issuer={issuer}")
+                return issuer
+        except Exception as e:
+            print(f"  [XRPSCAN] lookup failed for {code}: {e}")
+    return None
+
+
+def get_gateway_obligations(issuer):
+    """Return all obligations for an issuer via gateway_balances RPC."""
+    res = rpc("gateway_balances", {"account": issuer, "ledger_index": "validated"})
+    if not res:
+        return {}
+    return {k: float(v) for k, v in res.get("obligations", {}).items()}
+
+
+def get_rwa_data(xrp_price_usd):
+    """
+    For each token in RWA_REGISTRY:
+      - If status="discover": auto-lookup issuer via XRPSCAN API
+      - If status="confirmed": use issuer directly
+      - Query gateway_balances for the issuer
+      - Value = supply × price_usd
+    Returns total_usd_m, by_type, by_issuer, by_geography dicts.
+    """
+    by_type    = {}
+    by_issuer  = {}
+    by_geo     = {}
+    total_usd  = 0.0
+
+    # Cache of already-discovered issuers (avoid duplicate RPC calls)
+    issuer_cache = {}
+
+    for token in RWA_REGISTRY:
+        name     = token["name"]
+        currency = token["currency"]
+        alt_cur  = token.get("currency_alt", currency)
+        status   = token.get("status", "discover")
+        atype    = token["asset_type"]
+        geo      = token["geography"]
+        price_usd = token.get("price_usd", 1.0)
+
+        # Resolve issuer
+        issuer = token.get("issuer") if status == "confirmed" else None
+        if not issuer:
+            # Try cache first
+            cache_key = alt_cur or currency
+            if cache_key in issuer_cache:
+                issuer = issuer_cache[cache_key]
+            else:
+                # Try short code first (more reliable with XRPSCAN), then hex
+                issuer = xrpscan_token_lookup(alt_cur) or xrpscan_token_lookup(currency)
+                issuer_cache[cache_key] = issuer
+
+        if not issuer:
+            print(f"  [SKIP] {name} — cannot resolve issuer")
+            continue
+
+        obligations = issuer_cache.get(f"obs_{issuer}")
+        if obligations is None:
+            obligations = get_gateway_obligations(issuer)
+            issuer_cache[f"obs_{issuer}"] = obligations
+
+        # Try hex currency first, then short code
+        amount = obligations.get(currency, 0.0) or obligations.get(alt_cur, 0.0)
+        if amount <= 0:
+            print(f"  [ZERO] {name} ({alt_cur}) at {issuer} — no obligations found")
+            continue
+
+        usd_val = amount * (price_usd if price_usd else 1.0)
+        usd_m   = usd_val / 1_000_000
+
+        total_usd += usd_m
+        by_type[atype]   = round(by_type.get(atype, 0)   + usd_m, 4)
+        by_issuer[name]  = round(by_issuer.get(name, 0)  + usd_m, 4)
+        by_geo[geo]      = round(by_geo.get(geo, 0)      + usd_m, 4)
+        print(f"  {name}: {amount:,.2f} tokens @ ${price_usd} ≈ ${usd_m:.2f}M")
+
+    total_usd = round(total_usd, 4)
+    if total_usd == 0:
+        print("  [WARN] No RWA data — all XRPSCAN lookups failed or returned zero supply")
+        print("         Note: these are permissioned tokens with very few holders.")
+        print("         Check xrpscan.com manually and add confirmed issuer addresses.")
+        return None, {}, {}, {}
+
+    print(f"  Total RWA tracked: ${total_usd:.2f}M")
+    return total_usd, by_type, by_issuer, by_geo
+
+
+
+# ── Step 6: RLUSD data ───────────────────────────────────────────────────────
+
+def get_rlusd_data():
+    """
+    Fetch total RLUSD supply from CoinGecko and XRPL-side supply from gateway_balances.
+    Returns (total_m, xrpl_m, eth_m) all in USD millions (RLUSD is $1 pegged).
+    """
+    # Total supply — CoinGecko
+    total_m = None
+    d = fetch(f"https://api.coingecko.com/api/v3/coins/{RLUSD_COINGECKO_ID}"
+              f"?localization=false&tickers=false&market_data=true"
+              f"&community_data=false&developer_data=false")
+    if d and "market_data" in d:
+        cs = d["market_data"].get("circulating_supply") or d["market_data"].get("total_supply")
+        if cs:
+            total_m = round(float(cs) / 1e6, 4)
+            print(f"  RLUSD total supply: {cs:,.0f} ≈ ${total_m:.2f}M (CoinGecko)")
+
+    # XRPL side — gateway_balances (confirmed issuer address)
+    xrpl_m = None
+    if RLUSD_ISSUER_XRPL:
+        obs = get_gateway_obligations(RLUSD_ISSUER_XRPL)
+        # RLUSD uses hex currency code on mainnet
+        xrpl_raw = obs.get(RLUSD_CURRENCY_HEX) or obs.get("RLUSD", 0)
+        if xrpl_raw:
+            xrpl_m = round(float(xrpl_raw) / 1e6, 4)
+            print(f"  RLUSD XRPL supply: {xrpl_raw:,.0f} ≈ ${xrpl_m:.2f}M")
+
+    # Ethereum = total - XRPL (residual)
+    eth_m = None
+    if total_m is not None and xrpl_m is not None:
+        eth_m = round(max(total_m - xrpl_m, 0), 4)
+
+    if total_m is None:
+        print("  [WARN] CoinGecko returned no RLUSD data")
+
+    return total_m, xrpl_m, eth_m
+
+
+
 
 def update_data():
     sgt           = pytz.timezone("Asia/Singapore")
@@ -302,8 +551,24 @@ def update_data():
     if props and load_usd_m:
         load_cats = {k: round(props[k] * load_usd_m, 2) for k in props}
 
-    print(f"\n=== SUMMARY ===")
+    print("\n--- RWA on XRPL ---")
+    rwa_total_m, rwa_by_type, rwa_by_issuer, rwa_by_geo = get_rwa_data(xrp_price or 2.30)
+
+    print("\n--- RLUSD supply ---")
+    rlusd_total_m, rlusd_xrpl_m, rlusd_eth_m = get_rlusd_data()
+
+    # RLUSD daily minted = today total minus previous day total
+    rlusd_minted_m = None
+    prev = next((e for e in reversed(data) if e.get("date") != date_str
+                 and e.get("rlusd_total_m") is not None), None)
+    if prev and rlusd_total_m is not None:
+        rlusd_minted_m = round(rlusd_total_m - prev["rlusd_total_m"], 4)
+        print(f"  RLUSD minted today: {rlusd_minted_m:+.4f}M "
+              f"(prev={prev['rlusd_total_m']:.2f}M → now={rlusd_total_m:.2f}M)")
+
     print(f"  burn={burn_xrp} XRP | load=${load_usd_m}M | tx={total_tx_m}M")
+    print(f"  rwa=${rwa_total_m}M | rlusd_total=${rlusd_total_m}M "
+          f"(xrpl={rlusd_xrpl_m}, eth={rlusd_eth_m}) | minted={rlusd_minted_m}M")
 
     entry = {
         "date":              date_str,
@@ -312,10 +577,21 @@ def update_data():
         "total_coins_xrp":   current["coins"],
         "burn_xrp":          burn_xrp,
         "load_usd_m":        load_usd_m,
-        "transactions":      total_tx_m,       # actual so far (partial) or projected (complete)
-        "projected_tx_m":    projected_tx_m,   # always full-day projection for reference
+        "transactions":      total_tx_m,
+        "projected_tx_m":    projected_tx_m,
         "tx_categories":     tx_cats,
         "load_categories":   load_cats,
+        # ── RWA ───────────────────────────────────────────────────────────────
+        "rwa_total_usd_m":   rwa_total_m,
+        "rwa_by_type":       rwa_by_type,       # {bonds, fund, real_estate, commodities, equities}
+        "rwa_by_issuer":     rwa_by_issuer,     # {issuer_name: usd_m}
+        "rwa_by_geography":  rwa_by_geo,        # {US, UK, SG, other: usd_m}
+        # ── RLUSD ─────────────────────────────────────────────────────────────
+        "rlusd_total_m":     rlusd_total_m,     # total circulating supply (USD M)
+        "rlusd_xrpl_m":      rlusd_xrpl_m,      # XRPL-side supply
+        "rlusd_eth_m":       rlusd_eth_m,        # Ethereum-side (residual)
+        "rlusd_minted_m":    rlusd_minted_m,    # delta from prior day (+mint / -burn)
+        # ── Flags ─────────────────────────────────────────────────────────────
         "is_fallback":       False,
         "is_partial":        is_partial,
         "partial_as_of":     time_str if is_partial else None,
