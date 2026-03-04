@@ -458,6 +458,162 @@ def get_rlusd_data():
 
 
 
+
+
+# ── Step 7: RWA.xyz scrape (Distributed + Represented) ───────────────────────
+
+def get_rwa_xyz_data():
+    """
+    Fetch Distributed Asset Value and Represented Asset Value for XRPL from rwa.xyz.
+    These are the two key RWA figures:
+      - Distributed  = publicly tradable / on DEX  (~$461M as of Mar 2026)
+      - Represented  = total tokenized including private/restricted ("iceberg")
+    Returns (distributed_m, represented_m) or (None, None) on failure.
+    """
+    try:
+        url = "https://app.rwa.xyz/networks/xrp-ledger"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; XRPBurn/11)",
+            "Accept": "text/html"
+        })
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            html = r.read().decode("utf-8", errors="ignore")
+
+        import re
+
+        def parse_dollar_amount(text):
+            """Parse $461.21M or $1.49B into float millions."""
+            m = re.search(r'\$([\d,.]+)([BM])', text)
+            if not m:
+                return None
+            val = float(m.group(1).replace(',', ''))
+            return val * 1000 if m.group(2) == 'B' else val
+
+        # Look for "Distributed Asset Value" followed by the amount
+        dist_m = repr_m = None
+        for pattern, key in [
+            (r'Distributed Asset Value\D{0,30}\$([\d,.]+)([BM])', 'dist'),
+            (r'Represented Asset Value\D{0,30}\$([\d,.]+)([BM])', 'repr'),
+        ]:
+            m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+            if m:
+                val = float(m.group(1).replace(',', ''))
+                mult = 1000 if m.group(2) == 'B' else 1
+                if key == 'dist':
+                    dist_m = round(val * mult, 2)
+                else:
+                    repr_m = round(val * mult, 2)
+
+        if dist_m or repr_m:
+            print(f"  RWA.xyz: Distributed=${dist_m}M | Represented=${repr_m}M")
+            return dist_m, repr_m
+
+        print("  [WARN] rwa.xyz: could not parse amounts from page")
+        return None, None
+    except Exception as e:
+        print(f"  [WARN] rwa.xyz fetch failed: {e}")
+        return None, None
+
+
+# ── Step 8: Amendment voting ──────────────────────────────────────────────────
+
+# Amendments we track — name must match the XRPL feature name exactly.
+# Status reference (Jan–Mar 2026):
+#   PermissionedDomains  → ENABLED Feb 4 2026 (91% validator support)
+#   SingleAssetVault     → In voting (XLS-65, required for LendingProtocol)
+#   LendingProtocol      → In voting since Jan 28 2026 (XLS-66d)
+TRACKED_AMENDMENTS = [
+    {
+        "name":    "LendingProtocol",
+        "xls":     "XLS-66",
+        "label":   "Native Lending (XLS-66)",
+        "threshold": 80,         # % needed to activate
+        "countdown_weeks": 2,    # weeks of supermajority needed after 80%
+    },
+    {
+        "name":    "SingleAssetVault",
+        "xls":     "XLS-65",
+        "label":   "Single Asset Vault (XLS-65)",
+        "threshold": 80,
+        "countdown_weeks": 2,
+    },
+    {
+        "name":    "PermissionedDomains",
+        "xls":     "XLS-80",
+        "label":   "Permissioned Domains (XLS-80)",
+        "threshold": 80,
+        "countdown_weeks": 2,
+    },
+]
+
+def get_amendments():
+    """
+    Call the XRPL `feature` RPC to get live amendment voting status.
+    Returns list of dicts with name, xls, label, vote_pct, status, enabled.
+    """
+    res = rpc("feature", {})
+    if not res:
+        print("  [WARN] Could not fetch amendment data")
+        return []
+
+    features = res.get("features", {})
+    results  = []
+
+    for amend in TRACKED_AMENDMENTS:
+        name = amend["name"]
+        # features dict is keyed by amendment hash; find by name field
+        match = next(
+            (v for v in features.values() if v.get("name") == name),
+            None
+        )
+        if not match:
+            print(f"  [WARN] Amendment '{name}' not found in feature list")
+            results.append({
+                "name":      name,
+                "xls":       amend["xls"],
+                "label":     amend["label"],
+                "vote_pct":  None,
+                "enabled":   False,
+                "status":    "unknown",
+                "vetoed":    False,
+            })
+            continue
+
+        count      = match.get("count", 0)
+        threshold  = match.get("threshold", 0)     # validators needed for 80%
+        total_val  = match.get("validations", 0)   # total dUNL validators (~34)
+        enabled    = match.get("enabled", False)
+        vetoed     = match.get("vetoed", False)
+
+        # vote_pct = validators supporting / total validators
+        denominator = total_val if total_val > 0 else max(threshold, 1)
+        vote_pct    = round(count / denominator * 100, 1) if denominator else None
+
+        if enabled:
+            status = "enabled"
+        elif vetoed:
+            status = "vetoed"
+        elif vote_pct is not None and vote_pct >= amend["threshold"]:
+            status = "supermajority"   # ≥80% — 2-week countdown running
+        elif vote_pct is not None and vote_pct > 0:
+            status = "voting"
+        else:
+            status = "pending"
+
+        results.append({
+            "name":     name,
+            "xls":      amend["xls"],
+            "label":    amend["label"],
+            "vote_pct": vote_pct,
+            "enabled":  enabled,
+            "status":   status,
+            "vetoed":   vetoed,
+        })
+        print(f"  {amend['label']}: {vote_pct}%  [{status}]")
+
+    return results
+
+
 def update_data():
     sgt           = pytz.timezone("Asia/Singapore")
     now           = datetime.now(sgt)
@@ -554,6 +710,9 @@ def update_data():
     print("\n--- RWA on XRPL ---")
     rwa_total_m, rwa_by_type, rwa_by_issuer, rwa_by_geo = get_rwa_data(xrp_price or 2.30)
 
+    print("\n--- RWA.xyz (Distributed vs Represented) ---")
+    rwa_distributed_m, rwa_represented_m = get_rwa_xyz_data()
+
     print("\n--- RLUSD supply ---")
     rlusd_total_m, rlusd_xrpl_m, rlusd_eth_m = get_rlusd_data()
 
@@ -566,9 +725,13 @@ def update_data():
         print(f"  RLUSD minted today: {rlusd_minted_m:+.4f}M "
               f"(prev={prev['rlusd_total_m']:.2f}M → now={rlusd_total_m:.2f}M)")
 
-    print(f"  burn={burn_xrp} XRP | load=${load_usd_m}M | tx={total_tx_m}M")
-    print(f"  rwa=${rwa_total_m}M | rlusd_total=${rlusd_total_m}M "
-          f"(xrpl={rlusd_xrpl_m}, eth={rlusd_eth_m}) | minted={rlusd_minted_m}M")
+    # Burn threshold alert (1000 XRP/day)
+    BURN_ALERT_THRESHOLD = 1000
+    burn_alert = burn_xrp is not None and burn_xrp >= BURN_ALERT_THRESHOLD
+
+    print(f"  burn={burn_xrp} XRP {'ALERT' if burn_alert else ''} | load=${load_usd_m}M | tx={total_tx_m}M")
+    print(f"  rwa_dist=${rwa_distributed_m}M | rwa_repr=${rwa_represented_m}M")
+    print(f"  rlusd_total=${rlusd_total_m}M (xrpl={rlusd_xrpl_m}, eth={rlusd_eth_m})")
 
     entry = {
         "date":              date_str,
@@ -576,21 +739,27 @@ def update_data():
         "open_coins_xrp":    midnight_coins if midnight_coins else cached_open,
         "total_coins_xrp":   current["coins"],
         "burn_xrp":          burn_xrp,
+        "burn_alert":        burn_alert,
         "load_usd_m":        load_usd_m,
         "transactions":      total_tx_m,
         "projected_tx_m":    projected_tx_m,
         "tx_categories":     tx_cats,
         "load_categories":   load_cats,
-        # ── RWA ───────────────────────────────────────────────────────────────
+        # ── RWA (gateway_balances) ────────────────────────────────────────────
         "rwa_total_usd_m":   rwa_total_m,
-        "rwa_by_type":       rwa_by_type,       # {bonds, fund, real_estate, commodities, equities}
-        "rwa_by_issuer":     rwa_by_issuer,     # {issuer_name: usd_m}
-        "rwa_by_geography":  rwa_by_geo,        # {US, UK, SG, other: usd_m}
+        "rwa_by_type":       rwa_by_type,
+        "rwa_by_issuer":     rwa_by_issuer,
+        "rwa_by_geography":  rwa_by_geo,
+        # ── RWA (rwa.xyz Distributed vs Represented) ──────────────────────────
+        "rwa_distributed_m": rwa_distributed_m,
+        "rwa_represented_m": rwa_represented_m,
         # ── RLUSD ─────────────────────────────────────────────────────────────
-        "rlusd_total_m":     rlusd_total_m,     # total circulating supply (USD M)
-        "rlusd_xrpl_m":      rlusd_xrpl_m,      # XRPL-side supply
-        "rlusd_eth_m":       rlusd_eth_m,        # Ethereum-side (residual)
-        "rlusd_minted_m":    rlusd_minted_m,    # delta from prior day (+mint / -burn)
+        "rlusd_total_m":     rlusd_total_m,
+        "rlusd_xrpl_m":      rlusd_xrpl_m,
+        "rlusd_eth_m":       rlusd_eth_m,
+        "rlusd_minted_m":    rlusd_minted_m,
+        # ── Amendments ────────────────────────────────────────────────────────
+        "amendments":        amendments,
         # ── Flags ─────────────────────────────────────────────────────────────
         "is_fallback":       False,
         "is_partial":        is_partial,
