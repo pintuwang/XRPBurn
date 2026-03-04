@@ -464,52 +464,62 @@ def get_rlusd_data():
 
 def get_rwa_xyz_data():
     """
-    Fetch Distributed Asset Value and Represented Asset Value for XRPL from rwa.xyz.
-    These are the two key RWA figures:
-      - Distributed  = publicly tradable / on DEX  (~$461M as of Mar 2026)
-      - Represented  = total tokenized including private/restricted ("iceberg")
-    Returns (distributed_m, represented_m) or (None, None) on failure.
+    Fetch Distributed and Represented Asset Values for XRPL from rwa.xyz.
+    rwa.xyz is mostly client-side rendered, so we extract values from
+    whatever server-side HTML is present, with multiple fallback strategies.
+    Returns (distributed_m, represented_m) in USD millions, or (None, None).
     """
+    import re
     try:
         url = "https://app.rwa.xyz/networks/xrp-ledger"
         req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; XRPBurn/11)",
-            "Accept": "text/html"
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
         })
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             html = r.read().decode("utf-8", errors="ignore")
 
-        import re
-
-        def parse_dollar_amount(text):
-            """Parse $461.21M or $1.49B into float millions."""
-            m = re.search(r'\$([\d,.]+)([BM])', text)
-            if not m:
-                return None
-            val = float(m.group(1).replace(',', ''))
-            return val * 1000 if m.group(2) == 'B' else val
-
-        # Look for "Distributed Asset Value" followed by the amount
         dist_m = repr_m = None
+
+        # Strategy 1: label immediately followed by value (server-rendered)
         for pattern, key in [
-            (r'Distributed Asset Value\D{0,30}\$([\d,.]+)([BM])', 'dist'),
-            (r'Represented Asset Value\D{0,30}\$([\d,.]+)([BM])', 'repr'),
+            (r'Distributed Asset Value.{0,300}?\$([\d,]+\.?\d*)\s*([BM])', 'dist'),
+            (r'Represented Asset Value.{0,300}?\$([\d,]+\.?\d*)\s*([BM])', 'repr'),
         ]:
             m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
             if m:
-                val = float(m.group(1).replace(',', ''))
-                mult = 1000 if m.group(2) == 'B' else 1
-                if key == 'dist':
-                    dist_m = round(val * mult, 2)
-                else:
-                    repr_m = round(val * mult, 2)
+                val  = float(m.group(1).replace(',', ''))
+                mult = 1000 if m.group(2).upper() == 'B' else 1
+                if key == 'dist': dist_m = round(val * mult, 2)
+                else:             repr_m = round(val * mult, 2)
 
         if dist_m or repr_m:
-            print(f"  RWA.xyz: Distributed=${dist_m}M | Represented=${repr_m}M")
+            print(f"  rwa.xyz: Distributed=${dist_m}M | Represented=${repr_m}M")
             return dist_m, repr_m
 
-        print("  [WARN] rwa.xyz: could not parse amounts from page")
+        # Strategy 2: find all dollar amounts, infer from order/size
+        # rwa.xyz always shows Distributed first (smaller), Represented second (larger)
+        all_amounts = re.findall(r'\$([\d,]+\.?\d*)\s*([BM])', html)
+        parsed = []
+        for val_str, unit in all_amounts:
+            try:
+                val = float(val_str.replace(',', ''))
+                mult = 1000 if unit.upper() == 'B' else 1
+                parsed.append(round(val * mult, 2))
+            except Exception:
+                continue
+        plausible = [v for v in parsed if 50 <= v <= 10000]
+        if len(plausible) >= 2:
+            dist_m = min(plausible[:6])
+            repr_m = max(plausible[:6])
+            if repr_m > dist_m:
+                print(f"  rwa.xyz fallback: Distributed=${dist_m}M | Represented=${repr_m}M")
+                return dist_m, repr_m
+
+        print("  [WARN] rwa.xyz: page is fully client-side rendered — no values extractable")
         return None, None
+
     except Exception as e:
         print(f"  [WARN] rwa.xyz fetch failed: {e}")
         return None, None
@@ -724,6 +734,9 @@ def update_data():
         rlusd_minted_m = round(rlusd_total_m - prev["rlusd_total_m"], 4)
         print(f"  RLUSD minted today: {rlusd_minted_m:+.4f}M "
               f"(prev={prev['rlusd_total_m']:.2f}M → now={rlusd_total_m:.2f}M)")
+
+    print("\n--- Amendment voting ---")
+    amendments = get_amendments()
 
     # Burn threshold alert (1000 XRP/day)
     BURN_ALERT_THRESHOLD = 1000
