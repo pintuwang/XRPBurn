@@ -153,15 +153,6 @@
         <div id="rlusd-pct-bar" style="margin-top:10px; font-size:0.82em; color:#555;"></div>
     </div>
 
-    <div class="chart-wrapper">
-        <h3>Amendment Voting Progress</h3>
-        <p class="chart-subtitle">
-            Live validator support for key XRPL protocol upgrades. 80% held for 2 consecutive weeks triggers activation.
-            XLS-80 (Permissioned Domains) activated Feb 4 2026. XLS-65/66 (Lending) in voting since Jan 28 2026.
-        </p>
-        <canvas id="amendmentChart" style="height:180px !important;"></canvas>
-        <div id="amendment-status-list" style="margin-top:12px; font-size:0.82em;"></div>
-    </div>
         🔵 Saturday &nbsp;|&nbsp; 🔴 Sunday &nbsp;|&nbsp;
         🎈 Simulated (XRPL unreachable) &nbsp;|&nbsp;
         ░ Semi-transparent = partial day
@@ -175,7 +166,6 @@
         let rwaChartInst      = null;
         let rlusdChartInst    = null;
         let rwaIcebergInst    = null;
-        let amendmentChartInst= null;
         let rwaView           = 'type';
 
         const COLORS = {
@@ -320,7 +310,9 @@
                 const { ctx, scales: { x } } = chart;
                 if (!x) return;
                 chart.data.labels.forEach(label => {
-                    const day = new Date(label).getDay();
+                    // Parse YYYY-MM-DD directly to avoid UTC midnight timezone shift
+                    const parts = label.split('-');
+                    const day = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
                     if (day === 6 || day === 0) {
                         ctx.fillStyle = day === 6 ? '#1f77b4' : '#d62728';
                         ctx.beginPath();
@@ -406,7 +398,6 @@
             if (rwaChartInst)       rwaChartInst.destroy();
             if (rlusdChartInst)     rlusdChartInst.destroy();
             if (rwaIcebergInst)     rwaIcebergInst.destroy();
-            if (amendmentChartInst) amendmentChartInst.destroy();
 
             // ── LOAD CHART ────────────────────────────────────────────────────
             const loadDatasets = catKeys.map(cat => ({
@@ -445,7 +436,7 @@
                             stacked: true,
                             title: { display: true, text: 'USD Millions' },
                             ticks: { callback: v =>
-                                v >= 1000 ? '$'+(v/1000).toFixed(0)+'B' : '$'+v+'M' }
+                                v >= 1000 ? '$'+(v/1000).toFixed(1)+'B' : '$'+v+'M' }
                         }
                     }
                 },
@@ -537,7 +528,6 @@
             renderRwaChart(displayData);
             renderRwaIcebergChart(displayData);
             renderRlusdChart(displayData);
-            renderAmendmentChart();
             updateBriefingCard();
         }
 
@@ -785,90 +775,6 @@
                 },
                 plugins: [weekendDotsPlugin, partialHatchPlugin]
             });
-        }
-
-        // ── Amendment Chart ───────────────────────────────────────────────────────
-
-        function renderAmendmentChart() {
-            if (amendmentChartInst) amendmentChartInst.destroy();
-            const last = rawData[rawData.length - 1];
-            const amendments = (last && last.amendments) ? last.amendments : [];
-
-            const statusColors = {
-                enabled:      '#16a34a',
-                supermajority:'#f59e0b',
-                voting:       '#3b82f6',
-                pending:      '#9ca3af',
-                vetoed:       '#ef4444',
-                unknown:      '#d1d5db',
-            };
-
-            const labels  = amendments.map(a => a.label || a.name);
-            const values  = amendments.map(a => a.vote_pct ?? 0);
-            const bgColors= amendments.map(a => statusColors[a.status] || '#9ca3af');
-
-            amendmentChartInst = new Chart(
-                document.getElementById('amendmentChart').getContext('2d'), {
-                type: 'bar',
-                data: { labels, datasets: [
-                    {
-                        label: 'Validator Support (%)',
-                        data: values,
-                        backgroundColor: bgColors,
-                        borderRadius: 4,
-                    },
-                    {
-                        label: 'Threshold (80%)',
-                        data: labels.map(() => 80),
-                        type: 'line',
-                        borderColor: '#dc2626',
-                        borderDash: [6, 3],
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        fill: false,
-                    }
-                ]},
-                options: {
-                    indexAxis: 'y',
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: ctx => {
-                            const a = amendments[ctx.dataIndex];
-                            if (!a) return null;
-                            if (ctx.dataset.label === 'Threshold (80%)') return null;
-                            const pct = a.vote_pct != null ? `${a.vote_pct}%` : 'unknown';
-                            return `${pct} validator support — ${a.status}`;
-                        }}}
-                    },
-                    scales: {
-                        x: { min: 0, max: 100,
-                             title: { display: true, text: 'Validator Support (%)' },
-                             ticks: { callback: v => v + '%' }},
-                        y: { ticks: { font: { size: 11 }}}
-                    }
-                }
-            });
-
-            // Status list below chart
-            const el = document.getElementById('amendment-status-list');
-            if (!amendments.length) {
-                el.innerHTML = '<em style="color:#888">No amendment data yet — will populate on next generate_data.py run.</em>';
-                return;
-            }
-            const statusLabel = {
-                enabled:       '✅ ACTIVE',
-                supermajority: '🟡 SUPERMAJORITY — 2-week countdown running',
-                voting:        '🔵 Voting in progress',
-                pending:       '⚪ Pending — no votes yet',
-                vetoed:        '🔴 Vetoed',
-                unknown:       '❓ Unknown',
-            };
-            el.innerHTML = amendments.map(a => {
-                const pct  = a.vote_pct != null ? `<strong>${a.vote_pct}%</strong>` : 'n/a';
-                const stat = statusLabel[a.status] || a.status;
-                return `<span style="margin-right:24px">${a.label}: ${pct} — ${stat}</span>`;
-            }).join('<br>');
         }
 
         // ── Daily Briefing Card ───────────────────────────────────────────────────
