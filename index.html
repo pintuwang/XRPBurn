@@ -16,6 +16,14 @@
         #loadChart { height: 380px !important; }
         #burnChart { height: 160px !important; }
         #txChart   { height: 380px !important; }
+        #rwaChart  { height: 380px !important; }
+        #rlusdChart{ height: 280px !important; }
+        .view-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+        .view-toggle button {
+            padding: 4px 12px; font-size: 0.82em; cursor: pointer;
+            background: #e0e0e0; color: #333; border: none; border-radius: 4px; }
+        .view-toggle button.active {
+            background: #0c2c56; color: white; }
         .data-warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;
             padding: 8px 14px; font-size: 0.82em; color: #856404;
             display: none; margin-bottom: 16px; }
@@ -74,7 +82,32 @@
         <canvas id="txChart"></canvas>
     </div>
 
-    <div class="dot-legend">
+    <div class="chart-wrapper">
+        <h3>RWA on XRPL — Total Value (USD Millions)
+            <span style="font-size:0.65em;color:#888;font-weight:normal;margin-left:8px">
+                ⚠ Approximate — automated from on-chain gateway balances
+            </span>
+        </h3>
+        <p class="chart-subtitle">
+            Total value of tokenised real-world assets issued on XRPL, sourced from gateway_balances
+            of known RWA issuers. Update the RWA_REGISTRY in generate_data.py to add new projects.
+        </p>
+        <div class="view-toggle">
+            <button id="rwa-btn-type"     class="active" onclick="setRwaView('type')">By Asset Type</button>
+            <button id="rwa-btn-issuer"   onclick="setRwaView('issuer')">By Issuer</button>
+            <button id="rwa-btn-geo"      onclick="setRwaView('geography')">By Geography</button>
+        </div>
+        <canvas id="rwaChart"></canvas>
+    </div>
+
+    <div class="chart-wrapper">
+        <h3>RLUSD Circulating Supply &amp; Daily Minted</h3>
+        <p class="chart-subtitle">
+            Total RLUSD supply from CoinGecko (both chains), split into XRPL vs Ethereum portions
+            via on-chain gateway_balances. The line shows net daily minted (+) or burned (−).
+        </p>
+        <canvas id="rlusdChart"></canvas>
+    </div>
         🔵 Saturday &nbsp;|&nbsp; 🔴 Sunday &nbsp;|&nbsp;
         🎈 Simulated (XRPL unreachable) &nbsp;|&nbsp;
         ░ Semi-transparent = partial day
@@ -85,6 +118,9 @@
         let loadChartInst = null;
         let burnChartInst = null;
         let txChartInst   = null;
+        let rwaChartInst  = null;
+        let rlusdChartInst= null;
+        let rwaView       = 'type';   // 'type' | 'issuer' | 'geography'
 
         const COLORS = {
             settlement: '#2ca02c',
@@ -93,7 +129,24 @@
             acct_mgmt:  '#7f7f7f',
             pending:    '#a5c8ed',
             burn:       '#d62728',
+            // RWA asset types
+            bonds:       '#1a6fa8',
+            fund:        '#40a0d0',
+            real_estate: '#8fbc4a',
+            commodities: '#c7a832',
+            equities:    '#e8612a',
+            rwa_other:   '#aaaaaa',
+            // RLUSD
+            rlusd_xrpl:  '#346beb',
+            rlusd_eth:   '#8a44c8',
+            rlusd_mint:  '#16a34a',
         };
+
+        // Colour palette for dynamic keys (issuers, geographies)
+        const PALETTE = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd',
+                         '#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf',
+                         '#aec7e8','#ffbb78','#98df8a','#ff9896','#c5b0d5'];
+        function paletteColor(idx) { return PALETTE[idx % PALETTE.length]; }
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -224,6 +277,19 @@
 
         // ── Load data ─────────────────────────────────────────────────────────
 
+        function setRwaView(view) {
+            rwaView = view;
+            ['type','issuer','geography'].forEach(v => {
+                const btn = document.getElementById('rwa-btn-' + v);
+                if (btn) btn.classList.toggle('active', v === view);
+            });
+            const isMonthly = document.getElementById('rollup-toggle').checked;
+            const showPartial = document.getElementById('partial-toggle').checked;
+            let data = isMonthly ? rollUpMonthly(rawData) : rawData;
+            if (!showPartial) data = data.filter(d => !d.is_partial);
+            renderRwaChart(data);
+        }
+
         async function loadData() {
             try {
                 const r = await fetch('data.json?v=' + Date.now());
@@ -277,9 +343,11 @@
             const catKeys = ['settlement', 'identity', 'defi', 'acct_mgmt'];
             const labels  = displayData.map(d => d.date);
 
-            if (loadChartInst) loadChartInst.destroy();
-            if (burnChartInst) burnChartInst.destroy();
-            if (txChartInst)   txChartInst.destroy();
+            if (loadChartInst)  loadChartInst.destroy();
+            if (burnChartInst)  burnChartInst.destroy();
+            if (txChartInst)    txChartInst.destroy();
+            if (rwaChartInst)   rwaChartInst.destroy();
+            if (rlusdChartInst) rlusdChartInst.destroy();
 
             // ── LOAD CHART ────────────────────────────────────────────────────
             const loadDatasets = catKeys.map(cat => ({
@@ -404,6 +472,185 @@
                 },
                 plugins: [weekendDotsPlugin, fallbackIconPlugin, partialHatchPlugin]
             });
+
+            renderRwaChart(displayData);
+            renderRlusdChart(displayData);
+        }
+
+        // ── RWA Chart ─────────────────────────────────────────────────────────────
+
+        const RWA_TYPE_COLORS = {
+            bonds:       '#1a6fa8',
+            fund:        '#40a0d0',
+            real_estate: '#8fbc4a',
+            commodities: '#c7a832',
+            equities:    '#e8612a',
+            other:       '#aaaaaa',
+        };
+        const RWA_TYPE_LABELS = {
+            bonds: 'Bonds / T-Bills', fund: 'Funds / MMFs',
+            real_estate: 'Real Estate', commodities: 'Commodities',
+            equities: 'Equities', other: 'Other'
+        };
+
+        function renderRwaChart(displayData) {
+            if (rwaChartInst) rwaChartInst.destroy();
+            const labels = displayData.map(d => d.date);
+            const field  = rwaView === 'type'      ? 'rwa_by_type'
+                         : rwaView === 'issuer'    ? 'rwa_by_issuer'
+                         :                          'rwa_by_geography';
+
+            // Collect all unique keys across all days
+            const allKeys = [...new Set(
+                displayData.flatMap(d => Object.keys(d[field] || {}))
+            )];
+
+            if (allKeys.length === 0) {
+                // No data — show empty state
+                const ctx2 = document.getElementById('rwaChart').getContext('2d');
+                ctx2.clearRect(0, 0, ctx2.canvas.width, ctx2.canvas.height);
+                ctx2.font = '14px sans-serif';
+                ctx2.fillStyle = '#888';
+                ctx2.textAlign = 'center';
+                ctx2.fillText(
+                    '⚠ No RWA data yet — update RWA_REGISTRY issuer addresses in generate_data.py',
+                    ctx2.canvas.width / 2, 80
+                );
+                return;
+            }
+
+            const datasets = allKeys.map((key, idx) => {
+                const color = rwaView === 'type'
+                    ? (RWA_TYPE_COLORS[key] || COLORS.rwa_other)
+                    : paletteColor(idx);
+                const label = rwaView === 'type'
+                    ? (RWA_TYPE_LABELS[key] || key) : key;
+                return {
+                    label,
+                    data: displayData.map(d => (d[field] || {})[key] || 0),
+                    backgroundColor: displayData.map(d => withAlpha(color, barAlpha(d))),
+                    stack: 'rwa'
+                };
+            });
+
+            rwaChartInst = new Chart(
+                document.getElementById('rwaChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { tooltip: { callbacks: { label: ctx => {
+                        if (!ctx.raw) return null;
+                        const e = displayData[ctx.dataIndex];
+                        const suffix = isActivePartial(e)
+                            ? ` (partial as of ${e.partial_as_of} SGT)` : '';
+                        return `${ctx.dataset.label}: $${Number(ctx.raw).toFixed(2)}M${suffix}`;
+                    }}}},
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true,
+                             title: { display: true, text: 'USD Millions' },
+                             ticks: { callback: v =>
+                                 v >= 1000 ? '$'+(v/1000).toFixed(1)+'B' : '$'+v+'M' }}
+                    }
+                },
+                plugins: [weekendDotsPlugin, partialHatchPlugin]
+            });
+        }
+
+        // ── RLUSD Chart ───────────────────────────────────────────────────────────
+
+        function renderRlusdChart(displayData) {
+            if (rlusdChartInst) rlusdChartInst.destroy();
+            const labels = displayData.map(d => d.date);
+
+            const xrplData  = displayData.map(d => d.rlusd_xrpl_m  ?? null);
+            const ethData   = displayData.map(d => d.rlusd_eth_m   ?? null);
+            const mintData  = displayData.map(d => d.rlusd_minted_m ?? null);
+            // Fallback: if no chain split but total exists, show total as single bar
+            const totalOnly = displayData.map(d =>
+                (d.rlusd_total_m != null && d.rlusd_xrpl_m == null) ? d.rlusd_total_m : null);
+
+            rlusdChartInst = new Chart(
+                document.getElementById('rlusdChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'RLUSD on XRPL',
+                            data: xrplData,
+                            backgroundColor: displayData.map(d =>
+                                withAlpha(COLORS.rlusd_xrpl, barAlpha(d))),
+                            stack: 'supply', yAxisID: 'y'
+                        },
+                        {
+                            label: 'RLUSD on Ethereum',
+                            data: ethData,
+                            backgroundColor: displayData.map(d =>
+                                withAlpha(COLORS.rlusd_eth, barAlpha(d))),
+                            stack: 'supply', yAxisID: 'y'
+                        },
+                        {
+                            label: 'Total (no chain split)',
+                            data: totalOnly,
+                            backgroundColor: displayData.map(d =>
+                                withAlpha('#888', barAlpha(d))),
+                            stack: 'supply', yAxisID: 'y'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Net Minted / Burned',
+                            data: mintData,
+                            borderColor: '#16a34a',
+                            backgroundColor: ctx => {
+                                const v = mintData[ctx.dataIndex];
+                                return v >= 0 ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)';
+                            },
+                            pointBackgroundColor: mintData.map(v =>
+                                v == null ? 'transparent' : v >= 0 ? '#16a34a' : '#dc2626'),
+                            pointRadius: 5,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            yAxisID: 'y2',
+                            stack: undefined,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: { callbacks: { label: ctx => {
+                            if (ctx.raw == null) return null;
+                            const e = displayData[ctx.dataIndex];
+                            const suffix = isActivePartial(e)
+                                ? ` (partial as of ${e.partial_as_of} SGT)` : '';
+                            if (ctx.dataset.label === 'Net Minted / Burned') {
+                                const sign = ctx.raw >= 0 ? '+' : '';
+                                return `Net ${ctx.raw >= 0 ? 'Minted' : 'Burned'}: ${sign}$${Number(ctx.raw).toFixed(2)}M${suffix}`;
+                            }
+                            return `${ctx.dataset.label}: $${Number(ctx.raw).toFixed(2)}M${suffix}`;
+                        }}}
+                    },
+                    scales: {
+                        x: { stacked: true },
+                        y: {
+                            stacked: true,
+                            position: 'left',
+                            title: { display: true, text: 'Circulating Supply (USD M)' },
+                            ticks: { callback: v =>
+                                v >= 1000 ? '$'+(v/1000).toFixed(1)+'B' : '$'+v+'M' }
+                        },
+                        y2: {
+                            position: 'right',
+                            title: { display: true, text: 'Daily Net Minted (USD M)' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { callback: v => (v >= 0 ? '+' : '') + '$' + v + 'M' }
+                        }
+                    }
+                },
+                plugins: [weekendDotsPlugin, partialHatchPlugin]
+            });
         }
 
         // ── Monthly rollup ────────────────────────────────────────────────────
@@ -430,6 +677,18 @@
                 const catKeys = ['settlement','identity','defi','acct_mgmt'];
                 const hasCat  = entries.some(e => hasCategories(e.tx_categories));
                 const lastPartial = entries.filter(e=>e.is_partial).pop();
+
+                // RWA rollup — sum all category keys across entries
+                const mergeObj = (field) => {
+                    const out = {};
+                    entries.forEach(e => {
+                        Object.entries(e[field] || {}).forEach(([k, v]) => {
+                            out[k] = (out[k] || 0) + v;
+                        });
+                    });
+                    return out;
+                };
+
                 return {
                     date, is_fallback, is_partial,
                     partial_as_of: lastPartial?.partial_as_of || null,
@@ -439,6 +698,16 @@
                     transactions:  avg('transactions'),
                     tx_categories:   hasCat ? Object.fromEntries(catKeys.map(k=>[k,sumCat('tx_categories',k)]))  : {},
                     load_categories: hasCat ? Object.fromEntries(catKeys.map(k=>[k,sumCat('load_categories',k)])) : {},
+                    // RWA
+                    rwa_total_usd_m: avg('rwa_total_usd_m'),
+                    rwa_by_type:     mergeObj('rwa_by_type'),
+                    rwa_by_issuer:   mergeObj('rwa_by_issuer'),
+                    rwa_by_geography:mergeObj('rwa_by_geography'),
+                    // RLUSD
+                    rlusd_total_m:   avg('rlusd_total_m'),
+                    rlusd_xrpl_m:    avg('rlusd_xrpl_m'),
+                    rlusd_eth_m:     avg('rlusd_eth_m'),
+                    rlusd_minted_m:  avg('rlusd_minted_m'),
                 };
             });
         }
