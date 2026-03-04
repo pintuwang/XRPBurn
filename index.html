@@ -113,9 +113,16 @@
             return v >= 1000 ? '$'+(v/1000).toFixed(2)+'B' : '$'+v.toFixed(0)+'M';
         }
 
-        /** Return bar opacity: partial days = 0.45, complete = 1.0 */
+        /** Only the latest entry can be "active partial" — past partial days render as solid */
+        function isActivePartial(entry) {
+            if (!entry || !entry.is_partial) return false;
+            const last = rawData[rawData.length - 1];
+            return entry.date === last.date;
+        }
+
+        /** Return bar opacity: only today's partial = 0.45, all others = 1.0 */
         function barAlpha(entry) {
-            return (entry && entry.is_partial) ? 0.45 : 1.0;
+            return isActivePartial(entry) ? 0.45 : 1.0;
         }
 
         /** Apply alpha to a hex color */
@@ -152,7 +159,7 @@
 
                 chart.data.labels.forEach((label, labelIdx) => {
                     const e = rawData.find(d => d.date === label);
-                    if (!e || !e.is_partial) return;
+                    if (!isActivePartial(e)) return;
 
                     // Find the tallest bar top for this label across all datasets
                     let barTop    = y.bottom;
@@ -301,7 +308,7 @@
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (ctx.raw == null || ctx.raw === 0) return null;
                         const e = displayData[ctx.dataIndex];
-                        const suffix = e && e.is_partial
+                        const suffix = isActivePartial(e)
                             ? ` (partial — as of ${e.partial_as_of} SGT)` : '';
                         return `${ctx.dataset.label}: ${fmtUSD(ctx.raw)}${suffix}`;
                     }}}},
@@ -338,7 +345,7 @@
                         tooltip: { callbacks: { label: ctx => {
                             if (ctx.raw == null) return null;
                             const e = displayData[ctx.dataIndex];
-                            const suffix = e && e.is_partial
+                            const suffix = isActivePartial(e)
                                 ? ` (partial — since 00:00, as of ${e.partial_as_of} SGT)` : ' (full day)';
                             return `Burned: ${ctx.raw.toFixed(4)} XRP${suffix}`;
                         }}}
@@ -382,7 +389,7 @@
                     plugins: { tooltip: { callbacks: { label: ctx => {
                         if (!ctx.raw) return null;
                         const e = displayData[ctx.dataIndex];
-                        if (e && e.is_partial) {
+                        if (isActivePartial(e)) {
                             const proj = e.projected_tx_m
                                 ? `  |  projected full day: ${e.projected_tx_m.toFixed(2)}M` : '';
                             return `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(3)}M txs actual (since 00:00 SGT, as of ${e.partial_as_of})${proj}`;
