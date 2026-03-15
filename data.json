@@ -970,5 +970,70 @@
         "is_fallback": false,
         "is_partial": false,
         "partial_as_of": null
+    },
+    {
+        "date": "2026-03-16",
+        "last_updated": "2026-03-16 00:36:04",
+        "open_coins_xrp": 99985695616.1384,
+        "total_coins_xrp": 99985695606.6946,
+        "burn_xrp": 9.443802,
+        "burn_alert": false,
+        "load_usd_m": 1459.66,
+        "transactions": 0.0473,
+        "projected_tx_m": 1.9061,
+        "tx_categories": {
+            "settlement": 0.0147,
+            "identity": 0.0,
+            "defi": 0.0211,
+            "acct_mgmt": 0.0116
+        },
+        "load_categories": {
+            "settlement": 452.12,
+            "identity": 0.0,
+            "defi": 651.09,
+            "acct_mgmt": 356.45
+        },
+        "rwa_total_usd_m": null,
+        "rwa_by_type": {},
+        "rwa_by_issuer": {},
+        "rwa_by_geography": {},
+        "rwa_distributed_m": 160.5,
+        "rwa_represented_m": 1420.0,
+        "rlusd_total_m": 1552.6284,
+        "rlusd_xrpl_m": 315.0031,
+        "rlusd_eth_m": 1237.6253,
+        "rlusd_minted_m": 0.0,
+        "amendments": [
+            {
+                "name": "LendingProtocol",
+                "xls": "XLS-66",
+                "label": "Native Lending (XLS-66)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "SingleAssetVault",
+                "xls": "XLS-65",
+                "label": "Single Asset Vault (XLS-65)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "PermissionedDomains",
+                "xls": "XLS-80",
+                "label": "Permissioned Domains (XLS-80)",
+                "vote_pct": 0.0,
+                "enabled": true,
+                "status": "enabled",
+                "vetoed": false
+            }
+        ],
+        "is_fallback": false,
+        "is_partial": true,
+        "partial_as_of": "00:36"
     }
 ]
