@@ -1234,8 +1234,8 @@
     {
         "date": "2026-03-20",
         "last_updated": "2026-03-20 11:45:25",
-        "open_coins_xrp": 99985692258.23386,
-        "open_seq_xrpl": 102978636,
+        "open_coins_xrp": null,
+        "open_seq_xrpl": null,
         "total_coins_xrp": 99985691015.85912,
         "burn_xrp": 1242.374741,
         "burn_alert": true,
