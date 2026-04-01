@@ -2101,5 +2101,67 @@
         "is_baseline_search": false,
         "is_partial": true,
         "partial_as_of": "23:06"
+    },
+    {
+        "date": "2026-04-02",
+        "last_updated": "2026-04-02 00:59:04",
+        "open_coins_xrp": 99985681757.26274,
+        "open_seq_xrpl": 103268649,
+        "total_coins_xrp": 99985681757.26274,
+        "burn_xrp": null,
+        "burn_alert": false,
+        "load_usd_m": 1833.29,
+        "transactions": 0.0,
+        "projected_tx_m": 0.0,
+        "tx_categories": {},
+        "load_categories": {
+            "settlement": 505.65,
+            "identity": 0.0,
+            "defi": 1207.84,
+            "acct_mgmt": 119.8
+        },
+        "rwa_total_usd_m": null,
+        "rwa_by_type": {},
+        "rwa_by_issuer": {},
+        "rwa_by_geography": {},
+        "rwa_distributed_m": 73.75,
+        "rwa_represented_m": 1550.0,
+        "rlusd_total_m": 1387.8811,
+        "rlusd_xrpl_m": 340.2773,
+        "rlusd_eth_m": 1047.6038,
+        "rlusd_minted_m": 150.5,
+        "amendments": [
+            {
+                "name": "LendingProtocol",
+                "xls": "XLS-66",
+                "label": "Native Lending (XLS-66)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "SingleAssetVault",
+                "xls": "XLS-65",
+                "label": "Single Asset Vault (XLS-65)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "PermissionedDomains",
+                "xls": "XLS-80",
+                "label": "Permissioned Domains (XLS-80)",
+                "vote_pct": 0.0,
+                "enabled": true,
+                "status": "enabled",
+                "vetoed": false
+            }
+        ],
+        "is_fallback": false,
+        "is_baseline_search": false,
+        "is_partial": true,
+        "partial_as_of": "00:59"
     }
 ]
