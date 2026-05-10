@@ -4650,26 +4650,26 @@
     },
     {
         "date": "2026-05-10",
-        "last_updated": "2026-05-10 21:24:06",
+        "last_updated": "2026-05-10 22:55:40",
         "open_coins_xrp": 99985663252.23463,
         "open_seq_xrpl": 104116951,
-        "total_coins_xrp": 99985662907.75374,
-        "burn_xrp": 344.480896,
+        "total_coins_xrp": 99985662887.63623,
+        "burn_xrp": 364.598404,
         "burn_alert": false,
-        "load_usd_m": 1126.77,
-        "transactions": 1.4229,
-        "projected_tx_m": 1.5957,
+        "load_usd_m": 1153.38,
+        "transactions": 1.706,
+        "projected_tx_m": 1.7857,
         "tx_categories": {
-            "settlement": 0.7472,
+            "settlement": 0.9197,
             "identity": 0.0,
-            "defi": 0.5801,
-            "acct_mgmt": 0.0956
+            "defi": 0.6515,
+            "acct_mgmt": 0.1349
         },
         "load_categories": {
-            "settlement": 591.69,
+            "settlement": 621.77,
             "identity": 0.0,
-            "defi": 459.33,
-            "acct_mgmt": 75.74
+            "defi": 440.43,
+            "acct_mgmt": 91.18
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
@@ -4713,6 +4713,6 @@
         "is_fallback": false,
         "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "21:24"
+        "partial_as_of": "22:55"
     }
 ]
