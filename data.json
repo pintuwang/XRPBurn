@@ -1,70 +1,5 @@
 [
     {
-        "date": "2026-03-17",
-        "last_updated": "2026-03-17 23:00:16",
-        "open_coins_xrp": 99985694887.4608,
-        "total_coins_xrp": 99985694370.1332,
-        "burn_xrp": 517.327606,
-        "burn_alert": false,
-        "load_usd_m": 5024.88,
-        "transactions": 1.7736,
-        "projected_tx_m": 1.7736,
-        "tx_categories": {
-            "settlement": 0.679,
-            "identity": 0.0,
-            "defi": 0.7827,
-            "acct_mgmt": 0.3119
-        },
-        "load_categories": {
-            "settlement": 1923.68,
-            "identity": 0.0,
-            "defi": 2217.44,
-            "acct_mgmt": 883.75
-        },
-        "rwa_total_usd_m": null,
-        "rwa_by_type": {},
-        "rwa_by_issuer": {},
-        "rwa_by_geography": {},
-        "rwa_distributed_m": 160.5,
-        "rwa_represented_m": 1420.0,
-        "rlusd_total_m": 1549.5714,
-        "rlusd_xrpl_m": 315.4461,
-        "rlusd_eth_m": 1234.1253,
-        "rlusd_minted_m": -3.057,
-        "amendments": [
-            {
-                "name": "LendingProtocol",
-                "xls": "XLS-66",
-                "label": "Native Lending (XLS-66)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "SingleAssetVault",
-                "xls": "XLS-65",
-                "label": "Single Asset Vault (XLS-65)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "PermissionedDomains",
-                "xls": "XLS-80",
-                "label": "Permissioned Domains (XLS-80)",
-                "vote_pct": 0.0,
-                "enabled": true,
-                "status": "enabled",
-                "vetoed": false
-            }
-        ],
-        "is_fallback": false,
-        "is_partial": true,
-        "partial_as_of": "23:00"
-    },
-    {
         "date": "2026-03-18",
         "last_updated": "2026-03-18 23:06:11",
         "open_coins_xrp": 99985694351.88113,
@@ -5994,5 +5929,67 @@
         "is_baseline_search": false,
         "is_partial": true,
         "partial_as_of": "22:21"
+    },
+    {
+        "date": "2026-06-15",
+        "last_updated": "2026-06-15 00:24:12",
+        "open_coins_xrp": 99985647609.73267,
+        "open_seq_xrpl": 104922112,
+        "total_coins_xrp": 99985647609.73267,
+        "burn_xrp": null,
+        "burn_alert": false,
+        "load_usd_m": 855.4,
+        "transactions": 0.0,
+        "projected_tx_m": 0.0,
+        "tx_categories": {},
+        "load_categories": {
+            "settlement": 287.3,
+            "identity": 0.0,
+            "defi": 481.51,
+            "acct_mgmt": 86.59
+        },
+        "rwa_total_usd_m": null,
+        "rwa_by_type": {},
+        "rwa_by_issuer": {},
+        "rwa_by_geography": {},
+        "rwa_distributed_m": 66.85,
+        "rwa_represented_m": 4880.0,
+        "rlusd_total_m": 1638.8953,
+        "rlusd_xrpl_m": 759.8663,
+        "rlusd_eth_m": 879.029,
+        "rlusd_minted_m": 0.0,
+        "amendments": [
+            {
+                "name": "LendingProtocol",
+                "xls": "XLS-66",
+                "label": "Native Lending (XLS-66)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "SingleAssetVault",
+                "xls": "XLS-65",
+                "label": "Single Asset Vault (XLS-65)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "PermissionedDomains",
+                "xls": "XLS-80",
+                "label": "Permissioned Domains (XLS-80)",
+                "vote_pct": 0.0,
+                "enabled": true,
+                "status": "enabled",
+                "vetoed": false
+            }
+        ],
+        "is_fallback": false,
+        "is_baseline_search": false,
+        "is_partial": true,
+        "partial_as_of": "00:24"
     }
 ]
