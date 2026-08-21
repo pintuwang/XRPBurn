@@ -1,72 +1,5 @@
 [
     {
-        "date": "2026-05-24",
-        "last_updated": "2026-05-24 23:05:53",
-        "open_coins_xrp": 99985656967.54129,
-        "open_seq_xrpl": 104428912,
-        "total_coins_xrp": 99985656586.67122,
-        "burn_xrp": 380.870071,
-        "burn_alert": false,
-        "load_usd_m": 1396.86,
-        "transactions": 1.4743,
-        "projected_tx_m": 1.5319,
-        "tx_categories": {
-            "settlement": 0.2787,
-            "identity": 0.0,
-            "defi": 1.1114,
-            "acct_mgmt": 0.0842
-        },
-        "load_categories": {
-            "settlement": 264.02,
-            "identity": 0.0,
-            "defi": 1053.02,
-            "acct_mgmt": 79.82
-        },
-        "rwa_total_usd_m": null,
-        "rwa_by_type": {},
-        "rwa_by_issuer": {},
-        "rwa_by_geography": {},
-        "rwa_distributed_m": 293.9,
-        "rwa_represented_m": 4260.0,
-        "rlusd_total_m": 1749.6634,
-        "rlusd_xrpl_m": 678.7734,
-        "rlusd_eth_m": 1070.89,
-        "rlusd_minted_m": -7.8,
-        "amendments": [
-            {
-                "name": "LendingProtocol",
-                "xls": "XLS-66",
-                "label": "Native Lending (XLS-66)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "SingleAssetVault",
-                "xls": "XLS-65",
-                "label": "Single Asset Vault (XLS-65)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "PermissionedDomains",
-                "xls": "XLS-80",
-                "label": "Permissioned Domains (XLS-80)",
-                "vote_pct": 0.0,
-                "enabled": true,
-                "status": "enabled",
-                "vetoed": false
-            }
-        ],
-        "is_fallback": false,
-        "is_baseline_search": false,
-        "is_partial": true,
-        "partial_as_of": "23:05"
-    },
-    {
         "date": "2026-05-25",
         "last_updated": "2026-05-25 22:09:51",
         "open_coins_xrp": 99985656578.09102,
@@ -6000,5 +5933,67 @@
         "is_baseline_search": false,
         "is_partial": false,
         "partial_as_of": null
+    },
+    {
+        "date": "2026-08-22",
+        "last_updated": "2026-08-22 00:36:30",
+        "open_coins_xrp": 99985626104.80087,
+        "open_seq_xrpl": 106448841,
+        "total_coins_xrp": 99985626104.80087,
+        "burn_xrp": null,
+        "burn_alert": false,
+        "load_usd_m": 8873.59,
+        "transactions": 0.0,
+        "projected_tx_m": 0.0,
+        "tx_categories": {},
+        "load_categories": {
+            "settlement": 3664.4,
+            "identity": 0.0,
+            "defi": 4115.71,
+            "acct_mgmt": 1093.48
+        },
+        "rwa_total_usd_m": null,
+        "rwa_by_type": {},
+        "rwa_by_issuer": {},
+        "rwa_by_geography": {},
+        "rwa_distributed_m": 212.9,
+        "rwa_represented_m": 5090.0,
+        "rlusd_total_m": 1933.8852,
+        "rlusd_xrpl_m": 961.3609,
+        "rlusd_eth_m": 972.5243,
+        "rlusd_minted_m": 0.0,
+        "amendments": [
+            {
+                "name": "LendingProtocol",
+                "xls": "XLS-66",
+                "label": "Native Lending (XLS-66)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "SingleAssetVault",
+                "xls": "XLS-65",
+                "label": "Single Asset Vault (XLS-65)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "PermissionedDomains",
+                "xls": "XLS-80",
+                "label": "Permissioned Domains (XLS-80)",
+                "vote_pct": 0.0,
+                "enabled": true,
+                "status": "enabled",
+                "vetoed": false
+            }
+        ],
+        "is_fallback": false,
+        "is_baseline_search": false,
+        "is_partial": true,
+        "partial_as_of": "00:36"
     }
 ]
