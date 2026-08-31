@@ -18,6 +18,16 @@ RWA:   XRPSCAN gateway_balances + rwa.xyz scrape.
 RLUSD: CoinGecko supply + XRPL gateway_balances.
 Amendments: XRPL `feature` RPC.
 Partial: is_partial=True before 23:30 SGT, False after.
+
+Backfill (irregular/missed runs): if a day never got a run at/after 23:30 SGT
+(e.g. the last run was 6pm and then updates stopped for the day), it's saved
+with is_partial=True and frozen at that partial value. The NEXT day's first
+run retroactively corrects it:
+    exact_full_day_burn = yesterday.open_coins_xrp − today.open_coins_xrp
+Both sides are midnight-boundary ledger readings, so this is exact, not an
+estimate. The corrected entry is marked is_partial=False, backfilled=True,
+and its transaction count/categories are promoted from the partial actual
+to the day's projected full-day figure.
 """
 
 import json, os, sys, time, urllib.request, urllib.error
@@ -478,6 +488,52 @@ def get_rwa_xyz_data():
         return None, None
 
 
+# ── Step 7b: Backfill yesterday if it was left partial ────────────────────────
+
+def backfill_previous_day(data, date_str, open_coins):
+    """
+    If yesterday's entry never got a run at/after 23:30 SGT, it's stuck as
+    is_partial=True, frozen at whatever time its last run happened. Since
+    today's midnight baseline (open_coins) and yesterday's midnight baseline
+    (open_coins_xrp) are both midnight-boundary ledger readings, their
+    difference is yesterday's exact full-day burn — not an estimate.
+    Mutates the matching entry in `data` in place.
+    """
+    if open_coins is None:
+        return
+
+    yesterday_str = (datetime.strptime(date_str, "%Y-%m-%d").date()
+                      - timedelta(days=1)).strftime("%Y-%m-%d")
+    prev = next((e for e in data if e.get("date") == yesterday_str), None)
+    if not prev or not prev.get("is_partial") or prev.get("backfilled"):
+        return
+
+    prev_open = prev.get("open_coins_xrp")
+    if not prev_open:
+        return
+
+    exact_burn = round(prev_open - open_coins, 6)
+    if not (0 <= exact_burn <= 5000):
+        print(f"  [WARN] Backfill skipped for {yesterday_str} — "
+              f"implausible burn {exact_burn} XRP")
+        return
+
+    prev["burn_xrp"]   = exact_burn
+    prev["is_partial"] = False
+    prev["backfilled"] = True
+
+    old_total = prev.get("transactions") or 0
+    new_total = prev.get("projected_tx_m")
+    old_cats  = prev.get("tx_categories") or {}
+    if new_total and old_total:
+        scale = new_total / old_total
+        prev["tx_categories"] = {k: round(v * scale, 4) for k, v in old_cats.items()}
+        prev["transactions"]  = new_total
+
+    print(f"  ✓ Backfilled {yesterday_str}: burn={exact_burn} XRP "
+          f"(was partial as of {prev.get('partial_as_of')})")
+
+
 # ── Step 8: Amendment voting ──────────────────────────────────────────────────
 
 def get_amendments():
@@ -591,6 +647,9 @@ def update_data():
     open_coins, open_seq, is_baseline_search = get_midnight_baseline(
         current, midnight_utc, hours_elapsed, cached_coins, cached_seq
     )
+
+    # ── Backfill yesterday if it was left partial ──────────────────────────────
+    backfill_previous_day(data, date_str, open_coins)
 
     # ── Ledgers/day from actual measured window ───────────────────────────────
     if open_seq:
@@ -712,6 +771,7 @@ def update_data():
         "is_baseline_search": is_baseline_search,
         "is_partial":         is_partial,
         "partial_as_of":      time_str if is_partial else None,
+        "backfilled":         False,
     }
 
     # Safety net: never lose a previously locked baseline due to a failed run
