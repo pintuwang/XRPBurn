@@ -1,12 +1,6 @@
 """
-XRPBurn Data Generator — v12.1
-================================
-v12.1 adds: Retroactive backfill of yesterday's partial entry.
-  When today's first run finds yesterday still marked is_partial=True,
-  it uses today's open_coins (= yesterday's exact EOD coins) to
-  compute an exact full-day burn and promotes projected_tx_m to the
-  final transaction count. No extra API calls needed.
-
+XRPBurn Data Generator — v12
+=============================
 Burn logic (simplified & reliable):
   - FIRST run of the day (no open_coins_xrp stored yet):
       → snapshot current total_coins as today's midnight baseline
@@ -39,8 +33,9 @@ COMPLETE_MIN         = 30
 BASELINE_GRACE_HOURS = 1   # within this many hours of midnight → snapshot directly
 
 # ── RLUSD Config ──────────────────────────────────────────────────────────────
+# ✅ CONFIRMED via official Ripple docs (docs.ripple.com) and xrpscan.com
 RLUSD_ISSUER_XRPL  = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
-RLUSD_CURRENCY_HEX = "524C555344000000000000000000000000000000"
+RLUSD_CURRENCY_HEX = "524C555344000000000000000000000000000000"  # hex for "RLUSD"
 RLUSD_COINGECKO_ID = "ripple-usd"
 
 # ── RWA Registry ──────────────────────────────────────────────────────────────
@@ -173,20 +168,32 @@ def get_current():
 
 def get_midnight_baseline(current, midnight_utc, hours_elapsed,
                           cached_coins, cached_seq):
+    """
+    Returns: (open_coins, open_seq, is_baseline_search)
+
+    Priority:
+      1. Already stored today → return as-is (locked, never overwrite)
+      2. First run within grace window → snapshot current ledger directly
+      3. Past grace window, no baseline → binary search once (emergency)
+      4. All else fails → return (None, None, False)
+    """
     sgt = timezone(timedelta(hours=8))
 
+    # ── Case 1: baseline already locked in from a previous run today ──────────
     if cached_coins is not None and cached_seq is not None:
         burn_so_far = cached_coins - current["coins"]
         print(f"  ✓ Using stored baseline: {cached_coins:,.4f} XRP "
               f"(seq #{cached_seq:,}) | burn so far = {burn_so_far:.4f} XRP")
         return cached_coins, cached_seq, False
 
+    # ── Case 2: first run of the day, within grace window of midnight ─────────
     if hours_elapsed <= BASELINE_GRACE_HOURS:
         print(f"  ✓ First run ({hours_elapsed:.2f}h since midnight) — "
               f"snapshotting current ledger as baseline")
         print(f"    open_coins = {current['coins']:,.4f} XRP | seq #{current['seq']:,}")
         return current["coins"], current["seq"], False
 
+    # ── Case 3: past grace window, no baseline — emergency binary search ──────
     print(f"  ⚠ No baseline and {hours_elapsed:.1f}h elapsed — "
           f"running emergency binary search for midnight ledger")
 
@@ -429,6 +436,7 @@ def get_rwa_xyz_data():
             html = r.read().decode("utf-8", errors="ignore")
 
         dist_m = repr_m = None
+
         for pattern, key in [
             (r'Distributed Asset Value.{0,300}?\$([\d,]+\.?\d*)\s*([BM])', 'dist'),
             (r'Represented Asset Value.{0,300}?\$([\d,]+\.?\d*)\s*([BM])', 'repr'),
@@ -458,7 +466,8 @@ def get_rwa_xyz_data():
             dist_m = min(plausible[:6])
             repr_m = max(plausible[:6])
             if repr_m > dist_m:
-                print(f"  rwa.xyz fallback: Distributed=${dist_m}M | Represented=${repr_m}M")
+                print(f"  rwa.xyz fallback: Distributed=${dist_m}M | "
+                      f"Represented=${repr_m}M")
                 return dist_m, repr_m
 
         print("  [WARN] rwa.xyz: page fully client-side rendered — no values extractable")
@@ -533,89 +542,6 @@ def get_amendments():
     return results
 
 
-# ── Step 9: backfill yesterday ────────────────────────────────────────────────
-
-def backfill_yesterday(data, today_open_coins):
-    """
-    If yesterday's entry is still is_partial=True, backfill it using
-    today's open_coins as yesterday's exact end-of-day total_coins.
-
-    Burn:  yesterday.open_coins_xrp − today_open_coins  (exact)
-    Tx:    promote projected_tx_m → transactions
-    Cats:  rescale tx_categories to projected total; recompute load_categories
-    Load:  leave load_usd_m as-is (can't retroactively get a better CoinGecko figure)
-
-    Returns the mutated data list. Modifies the entry in-place.
-    """
-    if today_open_coins is None:
-        return data
-
-    sgt = pytz.timezone("Asia/Singapore")
-    yesterday = (datetime.now(sgt) - timedelta(days=1)).strftime("%Y-%m-%d")
-    entry = next((e for e in data if e.get("date") == yesterday), None)
-
-    if not entry:
-        print(f"  [BACKFILL] No entry for {yesterday} — nothing to backfill")
-        return data
-
-    if not entry.get("is_partial"):
-        print(f"  [BACKFILL] {yesterday} already complete — skipping")
-        return data
-
-    open_coins = entry.get("open_coins_xrp")
-    if not open_coins:
-        print(f"  [BACKFILL] {yesterday} has no open_coins_xrp — cannot compute burn")
-        return data
-
-    print(f"\n{'─'*55}")
-    print(f"  BACKFILL: {yesterday} (was partial as of {entry.get('partial_as_of', '?')})")
-    print(f"{'─'*55}")
-
-    # ── Burn: exact full-day delta ──────────────────────────────────────
-    old_burn = entry.get("burn_xrp")
-    if open_coins > today_open_coins:
-        new_burn = round(open_coins - today_open_coins, 6)
-        entry["burn_xrp"] = new_burn
-        entry["total_coins_xrp"] = today_open_coins
-        print(f"  Burn: {open_coins:,.4f} − {today_open_coins:,.4f} = {new_burn} XRP"
-              f"  (was {old_burn})")
-    else:
-        print(f"  [WARN] open_coins ({open_coins}) <= today_open ({today_open_coins})"
-              f" — burn left as {old_burn}")
-
-    # ── Transactions: promote projected_tx_m ────────────────────────────
-    projected = entry.get("projected_tx_m")
-    old_tx = entry.get("transactions")
-    if projected and projected > 0:
-        entry["transactions"] = projected
-        print(f"  Tx: {old_tx}M (partial actual) → {projected}M (projected full day)")
-
-        # Rescale tx_categories using proportions from the partial entry
-        old_cats = entry.get("tx_categories", {})
-        cat_total = sum(old_cats.values()) if old_cats else 0
-        if cat_total > 0:
-            props = {k: v / cat_total for k, v in old_cats.items()}
-            entry["tx_categories"] = {k: round(props[k] * projected, 4) for k in props}
-            print(f"  Tx categories rescaled to projected total")
-
-            # Also recompute load_categories with same proportions
-            load_usd = entry.get("load_usd_m")
-            if load_usd:
-                entry["load_categories"] = {k: round(props[k] * load_usd, 2) for k in props}
-                print(f"  Load categories recomputed with same proportions")
-    else:
-        print(f"  [WARN] No projected_tx_m stored — tx left as {old_tx}")
-
-    # ── Mark complete ───────────────────────────────────────────────────
-    entry["is_partial"] = False
-    entry["partial_as_of"] = None
-    entry["backfilled"] = True
-    entry["last_updated"] = datetime.now(sgt).strftime("%Y-%m-%d %H:%M:%S") + " (backfill)"
-
-    print(f"  ✓ {yesterday} backfilled and marked complete")
-    return data
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def update_data():
@@ -632,7 +558,7 @@ def update_data():
     hours_elapsed = (datetime.now(timezone.utc) - midnight_utc).total_seconds() / 3600
 
     print(f"\n{'='*55}")
-    print(f"  XRPBurn v12.1: {timestamp_str} SGT | "
+    print(f"  XRPBurn v12: {timestamp_str} SGT | "
           f"{'PARTIAL' if is_partial else 'COMPLETE'} | "
           f"{hours_elapsed:.2f}h since midnight")
     print(f"{'='*55}")
@@ -666,10 +592,6 @@ def update_data():
         current, midnight_utc, hours_elapsed, cached_coins, cached_seq
     )
 
-    # ── Backfill yesterday if it was left partial ─────────────────────────────
-    print("\n--- Backfill check ---")
-    data = backfill_yesterday(data, open_coins)
-
     # ── Ledgers/day from actual measured window ───────────────────────────────
     if open_seq:
         ledgers_in_window = current["seq"] - open_seq
@@ -688,6 +610,7 @@ def update_data():
         current["seq"], real_lpd
     )
 
+    # Tx count: actual since midnight (partial) or full-day projection (complete)
     if is_partial and ledgers_in_window is not None and capped_avg:
         total_tx_m = round(capped_avg * ledgers_in_window / 1_000_000, 4)
         print(f"  PARTIAL: {ledgers_in_window:,} ledgers × {capped_avg:.0f} avg "
@@ -701,7 +624,7 @@ def update_data():
     xrp_price, vol_usd = get_price_vol()
     xrp_price = xrp_price or 2.30
 
-    # ── Burn ──────────────────────────────────────────────────────────────────
+    # ── Burn: simple subtraction from locked baseline ─────────────────────────
     burn_xrp = None
     if open_coins and open_coins > current["coins"]:
         burn_xrp = round(open_coins - current["coins"], 6)
@@ -756,34 +679,42 @@ def update_data():
     entry = {
         "date":               date_str,
         "last_updated":       timestamp_str,
+        # Baseline — locked on first run, never overwritten mid-day
         "open_coins_xrp":     open_coins,
         "open_seq_xrpl":      open_seq,
         "total_coins_xrp":    current["coins"],
+        # Burn
         "burn_xrp":           burn_xrp,
         "burn_alert":         burn_alert,
+        # Load
         "load_usd_m":         load_usd_m,
+        # Transactions
         "transactions":       total_tx_m,
         "projected_tx_m":     projected_tx_m,
         "tx_categories":      tx_cats,
         "load_categories":    load_cats,
+        # RWA
         "rwa_total_usd_m":    rwa_total_m,
         "rwa_by_type":        rwa_by_type,
         "rwa_by_issuer":      rwa_by_issuer,
         "rwa_by_geography":   rwa_by_geo,
         "rwa_distributed_m":  rwa_distributed_m,
         "rwa_represented_m":  rwa_represented_m,
+        # RLUSD
         "rlusd_total_m":      rlusd_total_m,
         "rlusd_xrpl_m":       rlusd_xrpl_m,
         "rlusd_eth_m":        rlusd_eth_m,
         "rlusd_minted_m":     rlusd_minted_m,
+        # Amendments
         "amendments":         amendments,
+        # Flags
         "is_fallback":        False,
         "is_baseline_search": is_baseline_search,
         "is_partial":         is_partial,
         "partial_as_of":      time_str if is_partial else None,
     }
 
-    # Safety net: never lose a previously locked baseline
+    # Safety net: never lose a previously locked baseline due to a failed run
     if existing:
         if existing.get("open_coins_xrp") and entry["open_coins_xrp"] is None:
             entry["open_coins_xrp"] = existing["open_coins_xrp"]
