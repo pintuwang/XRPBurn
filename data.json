@@ -5939,37 +5939,37 @@
     },
     {
         "date": "2026-09-02",
-        "last_updated": "2026-09-02 01:40:48",
+        "last_updated": "2026-09-02 04:43:54",
         "open_coins_xrp": 99985621707.01073,
         "open_seq_xrpl": 106692409,
-        "total_coins_xrp": 99985621678.09222,
-        "burn_xrp": 28.918503,
+        "total_coins_xrp": 99985621613.94641,
+        "burn_xrp": 93.064316,
         "burn_alert": false,
-        "load_usd_m": 1787.42,
-        "transactions": 0.1575,
-        "projected_tx_m": 2.25,
+        "load_usd_m": 1953.23,
+        "transactions": 0.4232,
+        "projected_tx_m": 2.1463,
         "tx_categories": {
-            "settlement": 0.075,
+            "settlement": 0.1865,
             "identity": 0.0,
-            "defi": 0.071,
-            "acct_mgmt": 0.0115
+            "defi": 0.1843,
+            "acct_mgmt": 0.0524
         },
         "load_categories": {
-            "settlement": 850.84,
+            "settlement": 860.75,
             "identity": 0.0,
-            "defi": 805.75,
-            "acct_mgmt": 130.83
+            "defi": 850.66,
+            "acct_mgmt": 241.82
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
         "rwa_by_issuer": {},
         "rwa_by_geography": {},
         "rwa_distributed_m": 192.9,
-        "rwa_represented_m": 5020.0,
-        "rlusd_total_m": 2270.3929,
-        "rlusd_xrpl_m": 1045.1323,
-        "rlusd_eth_m": 1225.2606,
-        "rlusd_minted_m": 6.0,
+        "rwa_represented_m": 5470.0,
+        "rlusd_total_m": 2399.0905,
+        "rlusd_xrpl_m": 1046.3616,
+        "rlusd_eth_m": 1352.7289,
+        "rlusd_minted_m": 134.6976,
         "amendments": [
             {
                 "name": "LendingProtocol",
@@ -6000,9 +6000,9 @@
             }
         ],
         "is_fallback": false,
-        "is_baseline_search": true,
+        "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "01:40",
+        "partial_as_of": "04:43",
         "backfilled": false
     }
 ]
