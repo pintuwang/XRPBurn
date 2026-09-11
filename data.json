@@ -5977,37 +5977,37 @@
     },
     {
         "date": "2026-09-12",
-        "last_updated": "2026-09-12 02:14:12",
+        "last_updated": "2026-09-12 05:34:04",
         "open_coins_xrp": 99985617035.20445,
         "open_seq_xrpl": 106915695,
-        "total_coins_xrp": 99985617009.24464,
-        "burn_xrp": 25.959808,
+        "total_coins_xrp": 99985616974.5552,
+        "burn_xrp": 60.649246,
         "burn_alert": false,
-        "load_usd_m": 2721.5,
-        "transactions": 0.1272,
-        "projected_tx_m": 1.3646,
+        "load_usd_m": 2810.46,
+        "transactions": 0.2642,
+        "projected_tx_m": 1.1388,
         "tx_categories": {
-            "settlement": 0.0548,
+            "settlement": 0.0891,
             "identity": 0.0,
-            "defi": 0.0606,
-            "acct_mgmt": 0.0117
+            "defi": 0.1486,
+            "acct_mgmt": 0.0265
         },
         "load_categories": {
-            "settlement": 1173.37,
+            "settlement": 947.87,
             "identity": 0.0,
-            "defi": 1297.17,
-            "acct_mgmt": 250.96
+            "defi": 1580.71,
+            "acct_mgmt": 281.88
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
         "rwa_by_issuer": {},
         "rwa_by_geography": {},
-        "rwa_distributed_m": 193.1,
+        "rwa_distributed_m": 191.1,
         "rwa_represented_m": 5330.0,
-        "rlusd_total_m": 2404.9482,
-        "rlusd_xrpl_m": 1031.1147,
-        "rlusd_eth_m": 1373.8335,
-        "rlusd_minted_m": 0.0,
+        "rlusd_total_m": 2410.9482,
+        "rlusd_xrpl_m": 1053.0147,
+        "rlusd_eth_m": 1357.9335,
+        "rlusd_minted_m": 6.0,
         "amendments": [
             {
                 "name": "LendingProtocol",
@@ -6038,9 +6038,9 @@
             }
         ],
         "is_fallback": false,
-        "is_baseline_search": true,
+        "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "02:14",
+        "partial_as_of": "05:34",
         "backfilled": false
     }
 ]
