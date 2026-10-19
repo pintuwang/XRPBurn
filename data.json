@@ -6015,26 +6015,26 @@
     },
     {
         "date": "2026-10-20",
-        "last_updated": "2026-10-20 03:06:30",
+        "last_updated": "2026-10-20 07:24:53",
         "open_coins_xrp": 99985589209.14046,
         "open_seq_xrpl": 107765030,
-        "total_coins_xrp": 99985589105.79172,
-        "burn_xrp": 103.34874,
+        "total_coins_xrp": 99985588970.6991,
+        "burn_xrp": 238.44136,
         "burn_alert": false,
-        "load_usd_m": 1481.63,
-        "transactions": 0.3434,
-        "projected_tx_m": 2.6516,
+        "load_usd_m": 1308.71,
+        "transactions": 0.6561,
+        "projected_tx_m": 2.1236,
         "tx_categories": {
-            "settlement": 0.0321,
-            "identity": 0.0,
-            "defi": 0.0675,
-            "acct_mgmt": 0.2438
+            "settlement": 0.0717,
+            "identity": 0.0002,
+            "defi": 0.2652,
+            "acct_mgmt": 0.319
         },
         "load_categories": {
-            "settlement": 138.3,
-            "identity": 0.0,
-            "defi": 291.43,
-            "acct_mgmt": 1051.91
+            "settlement": 143.08,
+            "identity": 0.34,
+            "defi": 528.91,
+            "acct_mgmt": 636.39
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
@@ -6042,10 +6042,10 @@
         "rwa_by_geography": {},
         "rwa_distributed_m": 496.62,
         "rwa_represented_m": 7030.0,
-        "rlusd_total_m": 2408.4481,
-        "rlusd_xrpl_m": 953.7533,
-        "rlusd_eth_m": 1454.6948,
-        "rlusd_minted_m": -16.3805,
+        "rlusd_total_m": 2402.448,
+        "rlusd_xrpl_m": 941.3533,
+        "rlusd_eth_m": 1461.0947,
+        "rlusd_minted_m": -22.3806,
         "amendments": [
             {
                 "name": "LendingProtocol",
@@ -6076,9 +6076,9 @@
             }
         ],
         "is_fallback": false,
-        "is_baseline_search": true,
+        "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "03:06",
+        "partial_as_of": "07:24",
         "backfilled": false
     }
 ]
