@@ -6017,37 +6017,37 @@
     },
     {
         "date": "2026-10-22",
-        "last_updated": "2026-10-22 02:28:03",
+        "last_updated": "2026-10-22 06:11:03",
         "open_coins_xrp": 99985587615.51352,
         "open_seq_xrpl": 107808552,
-        "total_coins_xrp": 99985587539.83466,
-        "burn_xrp": 75.678864,
+        "total_coins_xrp": 99985587418.16623,
+        "burn_xrp": 197.34729,
         "burn_alert": false,
-        "load_usd_m": 1840.41,
-        "transactions": 0.2648,
-        "projected_tx_m": 2.5758,
+        "load_usd_m": 1912.89,
+        "transactions": 0.487,
+        "projected_tx_m": 1.8898,
         "tx_categories": {
-            "settlement": 0.0273,
+            "settlement": 0.0871,
             "identity": 0.0,
-            "defi": 0.0683,
-            "acct_mgmt": 0.1691
+            "defi": 0.2468,
+            "acct_mgmt": 0.1531
         },
         "load_categories": {
-            "settlement": 190.02,
+            "settlement": 342.09,
             "identity": 0.0,
-            "defi": 475.04,
-            "acct_mgmt": 1175.35
+            "defi": 969.54,
+            "acct_mgmt": 601.26
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
         "rwa_by_issuer": {},
         "rwa_by_geography": {},
-        "rwa_distributed_m": 496.74,
+        "rwa_distributed_m": 496.76,
         "rwa_represented_m": 7030.0,
-        "rlusd_total_m": 2367.0329,
-        "rlusd_xrpl_m": 905.1576,
-        "rlusd_eth_m": 1461.8753,
-        "rlusd_minted_m": -6.5,
+        "rlusd_total_m": 2346.0329,
+        "rlusd_xrpl_m": 907.2576,
+        "rlusd_eth_m": 1438.7753,
+        "rlusd_minted_m": -27.5,
         "amendments": [
             {
                 "name": "LendingProtocol",
@@ -6078,9 +6078,9 @@
             }
         ],
         "is_fallback": false,
-        "is_baseline_search": true,
+        "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "02:28",
+        "partial_as_of": "06:11",
         "backfilled": false
     }
 ]
