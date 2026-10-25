@@ -267,10 +267,20 @@ def classify(t):
     if t in ("Payment", "CheckCreate", "CheckCash", "CheckCancel"):
         return "settlement"
     if t in ("OfferCreate", "OfferCancel", "AMMCreate", "AMMDeposit",
-             "AMMWithdraw", "AMMBid", "AMMVote", "AMMDelete"):
+             "AMMWithdraw", "AMMBid", "AMMVote", "AMMDelete",
+             # XLS-65 Single Asset Vault
+             "VaultCreate", "VaultSet", "VaultDelete",
+             "VaultDeposit", "VaultWithdraw", "VaultClawback",
+             # XLS-66 Lending Protocol
+             "LoanBrokerSet", "LoanBrokerDelete",
+             "LoanBrokerCoverDeposit", "LoanBrokerCoverWithdraw",
+             "LoanSet", "LoanDelete", "LoanManage",
+             "LoanDraw", "LoanPay"):
         return "defi"
     if t in ("DIDSet", "DIDDelete", "CredentialCreate",
-             "CredentialAccept", "CredentialDelete", "DepositPreauth"):
+             "CredentialAccept", "CredentialDelete", "DepositPreauth",
+             # XLS-80 Permissioned Domains
+             "PermissionedDomainSet", "PermissionedDomainDelete"):
         return "identity"
     return "acct_mgmt"
 
