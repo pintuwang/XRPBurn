@@ -114,6 +114,7 @@
             Estimated daily count from fee-drop proxy, split by sampled category proportions.
         </p>
         <canvas id="txChart"></canvas>
+        <div id="acct-drill" style="margin-top:12px; font-size:0.82em; color:#444; overflow-x:auto;"></div>
     </div>
 
     <div class="chart-wrapper">
@@ -506,6 +507,35 @@
             renderRwaIcebergChart(displayData);
             renderRlusdChart(displayData);
             updateBriefingCard();
+            renderAcctDrill();
+        }
+
+        // -- acct_mgmt drill-down: latest day that has tx_detail ------------------
+        function renderAcctDrill() {
+            const el = document.getElementById('acct-drill');
+            if (!el) return;
+            const e = [...rawData].reverse().find(d => d.tx_detail && d.tx_detail.acct_mgmt_types);
+            if (!e) {
+                el.innerHTML = '<em>acct_mgmt drill-down: no data yet (appears after the next run).</em>';
+                return;
+            }
+            const t = e.tx_detail;
+            const acctTotal = Object.values(t.acct_mgmt_types).reduce((a, b) => a + b, 0) || 1;
+            const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const typeRows = Object.entries(t.acct_mgmt_types).slice(0, 8).map(([k, v]) =>
+                `<tr><td>${esc(k)}</td><td style="text-align:right">${v}</td>` +
+                `<td style="text-align:right">${(v / acctTotal * 100).toFixed(1)}%</td></tr>`).join('');
+            const sendRows = (t.acct_mgmt_top_senders || []).map(s =>
+                `<tr><td><a href="https://xrpscan.com/account/${encodeURIComponent(s.account)}" target="_blank" rel="noopener">` +
+                `${esc(s.account.slice(0, 8))}...${esc(s.account.slice(-4))}</a></td>` +
+                `<td style="text-align:right">${s.count}</td>` +
+                `<td style="text-align:right">${(s.share * 100).toFixed(1)}%</td></tr>`).join('');
+            el.innerHTML =
+                `<strong>acct_mgmt drill-down - ${esc(e.date)}${e.is_partial ? ' (partial)' : ''}</strong>` +
+                ` <span style="opacity:0.7">${t.sample_txs} sampled txs, ${t.sample_ledgers} ledgers, stride ${t.sample_stride}; ` +
+                `${t.acct_mgmt_unique_senders} unique senders; Batch inner txs ${(t.batch_inner_share * 100).toFixed(1)}%</span>` +
+                `<table style="margin-top:6px; border-collapse:collapse; width:100%"><tr><th align="left">Tx type</th><th align="right">n</th><th align="right">share</th></tr>${typeRows}</table>` +
+                `<table style="margin-top:8px; border-collapse:collapse; width:100%"><tr><th align="left">Top sender</th><th align="right">n</th><th align="right">share</th></tr>${sendRows}</table>`;
         }
 
 

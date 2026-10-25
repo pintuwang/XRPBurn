@@ -31,11 +31,16 @@ to the day's projected full-day figure.
 """
 
 import json, os, sys, time, urllib.request, urllib.error
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 import pytz
 
 NODES                = ["https://xrplcluster.com", "https://xrpl.ws", "https://s2.ripple.com"]
 SAMPLE_N             = 40
+# Gap between sampled ledgers. 1 = 40 consecutive ledgers (~2.6 min, the original
+# method, keeps the category series comparable). Set to e.g. 400 to spread the same
+# 40 ledgers over ~7 hours so one bot burst can't decide the whole day's split.
+SAMPLE_STRIDE        = int(os.environ.get("XRPBURN_SAMPLE_STRIDE", "1"))
 TIMEOUT              = 30
 RIPPLE_EPOCH         = 946684800
 COMPLETE_HOUR        = 23
@@ -270,12 +275,21 @@ def classify(t):
     return "acct_mgmt"
 
 
+TF_INNER_BATCH_TXN = 0x40000000   # flag set on transactions executed inside a Batch
+TOP_SENDERS_N      = 5
+
+
 def get_categories(cur_seq, ledgers_per_day=17_500):
-    counts = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
+    counts       = {"settlement": 0, "identity": 0, "defi": 0, "acct_mgmt": 0}
+    type_counts  = Counter()   # every successful tx, by TransactionType
+    acct_types   = Counter()   # acct_mgmt bucket only, by TransactionType
+    acct_senders = Counter()   # acct_mgmt bucket only, by sending Account
+    batch_inner  = 0           # successful txs carrying tfInnerBatchTxn
     ok     = 0
-    print(f"  Sampling {SAMPLE_N} ledgers from #{cur_seq:,}")
+    print(f"  Sampling {SAMPLE_N} ledgers from #{cur_seq:,} "
+          f"(stride {SAMPLE_STRIDE})")
     for i in range(SAMPLE_N):
-        res = rpc("ledger", {"ledger_index": cur_seq - i,
+        res = rpc("ledger", {"ledger_index": cur_seq - i * SAMPLE_STRIDE,
                              "transactions": True, "expand": True})
         if not res:
             continue
@@ -290,13 +304,21 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
             if isinstance(meta, dict) and \
                meta.get("TransactionResult", "tesSUCCESS") != "tesSUCCESS":
                 continue
-            counts[classify(tx.get("TransactionType", ""))] += 1
+            ttype = tx.get("TransactionType", "")
+            cat   = classify(ttype)
+            counts[cat] += 1
+            type_counts[ttype] += 1
+            if int(tx.get("Flags", 0) or 0) & TF_INNER_BATCH_TXN:
+                batch_inner += 1
+            if cat == "acct_mgmt":
+                acct_types[ttype] += 1
+                acct_senders[tx.get("Account", "?")] += 1
         time.sleep(0.04)
 
     total = sum(counts.values())
     if total == 0 or ok == 0:
         print("  [WARN] No tx data")
-        return None, 0, 0, 0
+        return None, 0, 0, 0, None
 
     props             = {k: v / total for k, v in counts.items()}
     avg_tx_per_ledger = total / ok
@@ -307,7 +329,34 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
     print(f"  {ok} ledgers | {total} txs | avg={avg_tx_per_ledger:.0f}/ledger "
           f"(capped={capped_avg:.0f}) | projected={projected_tx_m:.3f}M/day")
     print("  " + " | ".join(f"{k}={v*100:.1f}%" for k, v in props.items()))
-    return props, projected_tx_m, capped_avg, ok
+
+    # ── acct_mgmt drill-down: which tx types and which senders fill the bucket ──
+    acct_total = counts["acct_mgmt"]
+    detail = {
+        "sample_txs":      total,
+        "sample_ledgers":  ok,
+        "sample_stride":   SAMPLE_STRIDE,
+        "type_counts":     dict(type_counts.most_common()),
+        "acct_mgmt_types": dict(acct_types.most_common()),
+        "acct_mgmt_top_senders": [
+            {"account": a, "count": c,
+             "share": round(c / acct_total, 4) if acct_total else 0}
+            for a, c in acct_senders.most_common(TOP_SENDERS_N)
+        ],
+        "acct_mgmt_unique_senders": len(acct_senders),
+        "batch_inner_txs": batch_inner,
+        "batch_inner_share": round(batch_inner / total, 4),
+    }
+    if acct_total:
+        print(f"  acct_mgmt drill-down ({acct_total} txs, "
+              f"{len(acct_senders)} unique senders):")
+        for t, c in acct_types.most_common(8):
+            print(f"    {t:<22} {c:>6}  {c/acct_total*100:5.1f}%")
+        print("  top acct_mgmt senders:")
+        for s in detail["acct_mgmt_top_senders"]:
+            print(f"    {s['account']}  {s['count']:>6}  {s['share']*100:5.1f}%")
+    print(f"  batch inner txs: {batch_inner} ({batch_inner/total*100:.1f}% of sample)")
+    return props, projected_tx_m, capped_avg, ok, detail
 
 
 # ── Step 5: RWA data ──────────────────────────────────────────────────────────
@@ -665,7 +714,7 @@ def update_data():
 
     # ── Transaction categories ────────────────────────────────────────────────
     print("\n--- Categories ---")
-    props, projected_tx_m, capped_avg, ledgers_ok = get_categories(
+    props, projected_tx_m, capped_avg, ledgers_ok, tx_detail = get_categories(
         current["seq"], real_lpd
     )
 
@@ -752,6 +801,7 @@ def update_data():
         "projected_tx_m":     projected_tx_m,
         "tx_categories":      tx_cats,
         "load_categories":    load_cats,
+        "tx_detail":          tx_detail,
         # RWA
         "rwa_total_usd_m":    rwa_total_m,
         "rwa_by_type":        rwa_by_type,
