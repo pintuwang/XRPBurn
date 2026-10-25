@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -40,23 +40,23 @@
 <body>
     <h1>XRPBurn Analysis Daily
         <span id="partial-badge" class="partial-badge" style="display:none">
-            â± Today partial â€” as of <span id="partial-time"></span> SGT
+            &#9201; Today partial -- as of <span id="partial-time"></span> SGT
         </span>
     </h1>
     <p>Last updated: <span id="last-update">-</span> (SGT)</p>
 
-    <!-- â”€â”€ Daily Briefing Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- Daily Briefing Card -->
     <div id="briefing-card" style="
         background: linear-gradient(135deg, #0c2c56 0%, #1a4a8a 100%);
         color: white; border-radius: 10px; padding: 18px 22px;
         margin-bottom: 20px; display: none;">
         <div style="font-size:0.75em; opacity:0.7; margin-bottom:6px; letter-spacing:1px;">
-            DAILY INSTITUTIONAL BRIEFING â€” <span id="bc-date"></span>
+            DAILY INSTITUTIONAL BRIEFING &mdash; <span id="bc-date"></span>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start;">
             <div id="bc-burn" style="flex:1; min-width:160px;">
                 <div style="font-size:0.7em; opacity:0.6; text-transform:uppercase;">XRP Burned</div>
-                <div style="font-size:1.6em; font-weight:bold;" id="bc-burn-val">â€”</div>
+                <div style="font-size:1.6em; font-weight:bold;" id="bc-burn-val">&mdash;</div>
                 <div style="font-size:0.72em; opacity:0.75;" id="bc-burn-note"></div>
             </div>
             <div style="flex:1; min-width:160px;">
@@ -92,7 +92,7 @@
     </div>
 
     <div class="chart-wrapper">
-        <h3>Network Load â€” Categorized USD (Millions)</h3>
+        <h3>Network Load &mdash; Categorized USD (Millions)</h3>
         <p class="chart-subtitle">
             CoinGecko rolling 24h exchange volume, split by on-chain tx category proportions.
             Semi-transparent bars = partial day (run before 23:30 SGT).
@@ -103,7 +103,7 @@
     <div class="chart-wrapper">
         <h3>XRP Burned per Day</h3>
         <p class="chart-subtitle">
-            Coin delta: open_coins (00:00 SGT) âˆ’ current_coins. Partial days show burn so far today.
+            Coin delta: open_coins (00:00 SGT) - current_coins. Partial days show burn so far today.
         </p>
         <canvas id="burnChart"></canvas>
     </div>
@@ -118,11 +118,11 @@
     </div>
 
     <div class="chart-wrapper">
-        <h3>RWA Iceberg â€” Distributed vs Represented Value</h3>
+        <h3>RWA Iceberg &mdash; Distributed vs Represented Value</h3>
         <p class="chart-subtitle">
             Source: rwa.xyz. <strong>Distributed</strong> = publicly tradable active liquidity on the XRPL DEX.
             <strong>Represented</strong> = total institutional tokenized value including private/restricted assets.
-            The gap is the "institutional iceberg" â€” value locked in permissioned pools.
+            The gap is the "institutional iceberg" &mdash; value locked in permissioned pools.
         </p>
         <canvas id="rwaIcebergChart"></canvas>
     </div>
@@ -131,16 +131,16 @@
         <h3>RLUSD Circulating Supply &amp; Daily Minted</h3>
         <p class="chart-subtitle">
             Total RLUSD supply from CoinGecko (both chains), split into XRPL vs Ethereum portions
-            via on-chain gateway_balances. The line shows net daily minted (+) or burned (âˆ’).
-            Watch for XRPL% crossing 25% â€” signals institutional bridging becoming dominant.
+            via on-chain gateway_balances. The line shows net daily minted (+) or burned (-).
+            Watch for XRPL% crossing 25% &mdash; signals institutional bridging becoming dominant.
         </p>
         <canvas id="rlusdChart"></canvas>
         <div id="rlusd-pct-bar" style="margin-top:10px; font-size:0.82em; color:#555;"></div>
     </div>
 
-        ðŸ”µ Saturday &nbsp;|&nbsp; ðŸ”´ Sunday &nbsp;|&nbsp;
-        ðŸŽˆ Simulated (XRPL unreachable) &nbsp;|&nbsp;
-        â–‘ Semi-transparent = partial day
+        &#128309; Saturday &nbsp;|&nbsp; &#128308; Sunday &nbsp;|&nbsp;
+        &#127880; Simulated (XRPL unreachable) &nbsp;|&nbsp;
+        &#9617; Semi-transparent = partial day
     </div>
 
     <script>
@@ -178,7 +178,7 @@
                          '#aec7e8','#ffbb78','#98df8a','#ff9896','#c5b0d5'];
         function paletteColor(idx) { return PALETTE[idx % PALETTE.length]; }
 
-        // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Helpers
 
         function hasCategories(cats) {
             return cats && typeof cats === 'object' &&
@@ -192,11 +192,11 @@
         }
 
         function fmtUSD(v) {
-            if (v == null) return 'â€”';
+            if (v == null) return '—';
             return v >= 1000 ? '$'+(v/1000).toFixed(2)+'B' : '$'+v.toFixed(0)+'M';
         }
 
-        /** Only the latest entry can be "active partial" â€” past partial days render as solid */
+        /** Only the latest entry can be "active partial" -- past partial days render as solid */
         function isActivePartial(entry) {
             if (!entry || !entry.is_partial) return false;
             const last = rawData[rawData.length - 1];
@@ -216,7 +216,7 @@
             return `rgba(${r},${g},${b},${alpha})`;
         }
 
-        // â”€â”€ Plugin: fallback balloons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // -- Plugin: fallback balloons -----------------------------------------
         const fallbackIconPlugin = {
             id: 'fallbackIcon',
             afterDraw: chart => {
@@ -226,13 +226,13 @@
                     const e = rawData.find(d => d.date === label);
                     if (e && e.is_fallback) {
                         ctx.font = '14px serif'; ctx.textAlign = 'center';
-                        ctx.fillText('ðŸŽˆ', x.getPixelForValue(label), y.top + 16);
+                        ctx.fillText('\u{1F388}', x.getPixelForValue(label), y.top + 16);
                     }
                 });
             }
         };
 
-        // â”€â”€ Plugin: partial day hatching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // -- Plugin: partial day hatching --------------------------------------
         // Draws diagonal lines clipped to the actual stacked bar area only.
         const partialHatchPlugin = {
             id: 'partialHatch',
@@ -275,7 +275,7 @@
                     ctx.lineWidth   = 1.2;
                     const h = barBottom - barTop;
                     const w = barRight  - barLeft;
-                    // Diagonal lines at 45Â°
+                    // Diagonal lines at 45&deg;
                     for (let offset = -h; offset < w + h; offset += 9) {
                         ctx.beginPath();
                         ctx.moveTo(barLeft  + offset,         barTop);
@@ -287,7 +287,7 @@
             }
         };
 
-        // â”€â”€ Plugin: weekend dots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // -- Plugin: weekend dots ----------------------------------------------
         const weekendDotsPlugin = {
             id: 'weekendDots',
             afterDraw: chart => {
@@ -312,7 +312,7 @@
             }
         };
 
-        // â”€â”€ Load data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Load data
 
 
         async function loadData() {
@@ -347,14 +347,14 @@
             const pnd = rawData.filter(d => !d.is_fallback && !hasCategories(d.tx_categories) && !d.is_partial);
             const msgs = [];
             if (sim.length)
-                msgs.push(`ðŸŽˆ <strong>${sim.length} day(s) used fallback data</strong> (XRPL unreachable): <em>${sim.map(d=>d.date).join(', ')}</em>`);
+                msgs.push(`&#127880; <strong>${sim.length} day(s) used fallback data</strong> (XRPL unreachable): <em>${sim.map(d=>d.date).join(', ')}</em>`);
             if (pnd.length)
-                msgs.push(`â³ <strong>${pnd.length} day(s) missing category data</strong> (completed days with no real breakdown): <em>${pnd.map(d=>d.date).join(', ')}</em>`);
+                msgs.push(`&#9203; <strong>${pnd.length} day(s) missing category data</strong> (completed days with no real breakdown): <em>${pnd.map(d=>d.date).join(', ')}</em>`);
             el.style.display = msgs.length ? 'block' : 'none';
             el.innerHTML = msgs.join('<br>');
         }
 
-        // â”€â”€ Chart rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Chart rendering
 
         function renderCharts() {
             const isMonthly     = document.getElementById('rollup-toggle').checked;
@@ -375,7 +375,7 @@
             if (rlusdChartInst)     rlusdChartInst.destroy();
             if (rwaIcebergInst)     rwaIcebergInst.destroy();
 
-            // â”€â”€ LOAD CHART â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // LOAD CHART
             const loadDatasets = catKeys.map(cat => ({
                 label: catLabel(cat),
                 data: displayData.map(d =>
@@ -404,7 +404,7 @@
                         if (ctx.raw == null || ctx.raw === 0) return null;
                         const e = displayData[ctx.dataIndex];
                         const suffix = isActivePartial(e)
-                            ? ` (partial â€” as of ${e.partial_as_of} SGT)` : '';
+                            ? ` (partial -- as of ${e.partial_as_of} SGT)` : '';
                         return `${ctx.dataset.label}: ${fmtUSD(ctx.raw)}${suffix}`;
                     }}}},
                     scales: {
@@ -420,7 +420,7 @@
                 plugins: [weekendDotsPlugin, fallbackIconPlugin, partialHatchPlugin]
             });
 
-            // â”€â”€ BURN CHART â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // BURN CHART
             burnChartInst = new Chart(
                 document.getElementById('burnChart').getContext('2d'), {
                 type: 'bar',
@@ -444,7 +444,7 @@
                             if (ctx.raw == null) return null;
                             const e = displayData[ctx.dataIndex];
                             const suffix = isActivePartial(e)
-                                ? ` (partial â€” since 00:00, as of ${e.partial_as_of} SGT)` : ' (full day)';
+                                ? ` (partial -- since 00:00, as of ${e.partial_as_of} SGT)` : ' (full day)';
                             return `Burned: ${ctx.raw.toFixed(4)} XRP${suffix}`;
                         }}}
                     },
@@ -460,7 +460,7 @@
                 plugins: [weekendDotsPlugin, partialHatchPlugin]
             });
 
-            // â”€â”€ TX CHART â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // TX CHART
             const txDatasets = catKeys.map(cat => ({
                 label: catLabel(cat),
                 data: displayData.map(d =>
@@ -539,7 +539,7 @@
         }
 
 
-        // â”€â”€ RLUSD Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // RLUSD Chart
 
         function renderRlusdChart(displayData) {
             if (rlusdChartInst) rlusdChartInst.destroy();
@@ -643,15 +643,15 @@
                 pctEl.innerHTML = `
                     <strong>XRPL share of RLUSD: ${xpct}%</strong>
                     ${hit25
-                        ? '<span style="color:#16a34a;font-weight:bold"> ðŸŽ¯ 25% milestone reached!</span>'
-                        : '<span style="color:#888"> (watch for 25% â€” institutional bridging signal)</span>'}
+                        ? '<span style="color:#16a34a;font-weight:bold"> &#127919; 25% milestone reached!</span>'
+                        : '<span style="color:#888"> (watch for 25% -- institutional bridging signal)</span>'}
                     <div style="margin-top:4px;background:#e5e7eb;border-radius:4px;height:8px;width:100%;max-width:400px">
                         <div style="background:${hit25 ? '#16a34a' : '#346beb'};width:${Math.min(xpct,100)}%;height:8px;border-radius:4px"></div>
                     </div>`;
             }
         }
 
-        // â”€â”€ RWA Iceberg Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // RWA Iceberg Chart
 
         function renderRwaIcebergChart(displayData) {
             if (rwaIcebergInst) rwaIcebergInst.destroy();
@@ -706,7 +706,7 @@
             });
         }
 
-        // â”€â”€ Daily Briefing Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Daily Briefing Card
 
         function updateBriefingCard() {
             const last = rawData[rawData.length - 1];
@@ -726,7 +726,7 @@
                 burnEl.textContent = last.burn_xrp.toFixed(0) + ' XRP';
                 if (last.burn_alert) {
                     burnEl.style.color = '#f87171';
-                    burnNote.textContent = 'ðŸš¨ ABOVE 1,000 XRP THRESHOLD';
+                    burnNote.textContent = '\u{1F6A8} ABOVE 1,000 XRP THRESHOLD';
                     burnNote.style.color = '#f87171';
                 } else {
                     burnEl.style.color = 'white';
@@ -734,7 +734,7 @@
                     burnNote.style.color = 'rgba(255,255,255,0.6)';
                 }
             } else {
-                burnEl.textContent = 'â€”';
+                burnEl.textContent = '—';
             }
 
             // RLUSD
@@ -748,16 +748,16 @@
                     const xrplPct = (last.rlusd_xrpl_m / last.rlusd_total_m * 100).toFixed(0);
                     const ethPct  = (100 - xrplPct);
                     const mintStr = last.rlusd_minted_m != null
-                        ? (last.rlusd_minted_m >= 0 ? ` â€¢ +$${last.rlusd_minted_m.toFixed(0)}M minted` : ` â€¢ -$${Math.abs(last.rlusd_minted_m).toFixed(0)}M burned`)
+                        ? (last.rlusd_minted_m >= 0 ? ` * +$${last.rlusd_minted_m.toFixed(0)}M minted` : ` * -$${Math.abs(last.rlusd_minted_m).toFixed(0)}M burned`)
                         : '';
                     rlusdSplit.textContent = `XRPL ${xrplPct}% / ETH ${ethPct}%${mintStr}`;
                     // Highlight if XRPL% hits 25%
                     if (parseFloat(xrplPct) >= 25) {
                         rlusdSplit.style.color = '#86efac';
-                        rlusdSplit.textContent += ' ðŸŽ¯ 25% milestone!';
+                        rlusdSplit.textContent += ' \u{1F3AF} 25% milestone!';
                     }
                 }
-            } else { rlusd.textContent = 'â€”'; }
+            } else { rlusd.textContent = '—'; }
 
             // RWA
             const rwaDist = document.getElementById('bc-rwa-dist');
@@ -766,7 +766,7 @@
                 rwaDist.textContent = '$' + last.rwa_distributed_m.toFixed(0) + 'M active';
             } else if (last.rwa_total_usd_m != null) {
                 rwaDist.textContent = '$' + last.rwa_total_usd_m.toFixed(0) + 'M tracked';
-            } else { rwaDist.textContent = 'â€”'; }
+            } else { rwaDist.textContent = '—'; }
             if (last.rwa_represented_m != null) {
                 rwaRepr.textContent = '$' + (last.rwa_represented_m >= 1000
                     ? (last.rwa_represented_m/1000).toFixed(2) + 'B'
@@ -783,9 +783,9 @@
             if (inVoting) {
                 amendEl.textContent = inVoting.label;
                 const statusMsg = {
-                    supermajority: `ðŸŸ¡ ${inVoting.vote_pct}% â€” 2-week countdown running`,
-                    voting:        `ðŸ”µ ${inVoting.vote_pct}% validator support`,
-                    enabled:       'âœ… ACTIVE on mainnet',
+                    supermajority: `\u{1F7E1} ${inVoting.vote_pct}% -- 2-week countdown running`,
+                    voting:        `\u{1F535} ${inVoting.vote_pct}% validator support`,
+                    enabled:       '✅ ACTIVE on mainnet',
                 }[inVoting.status] || inVoting.status;
                 amendNote.textContent = statusMsg;
             } else {
@@ -795,10 +795,10 @@
         }
 
         function updateRlusdPctBar() {
-            // Called from renderRlusdChart where displayData is in scope â€” see below
+            // Called from renderRlusdChart where displayData is in scope -- see below
         }
 
-        // â”€â”€ Monthly rollup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Monthly rollup
 
         function rollUpMonthly(data) {
             const months = {};
@@ -823,7 +823,7 @@
                 const hasCat  = entries.some(e => hasCategories(e.tx_categories));
                 const lastPartial = entries.filter(e=>e.is_partial).pop();
 
-                // RWA rollup â€” sum all category keys across entries
+                // RWA rollup -- sum all category keys across entries
                 const mergeObj = (field) => {
                     const out = {};
                     entries.forEach(e => {
@@ -855,13 +855,13 @@
                     rlusd_xrpl_m:    avg('rlusd_xrpl_m'),
                     rlusd_eth_m:     avg('rlusd_eth_m'),
                     rlusd_minted_m:  avg('rlusd_minted_m'),
-                    // Amendments â€” take the latest entry's amendment state
+                    // Amendments -- take the latest entry's amendment state
                     amendments: entries.filter(e => e.amendments && e.amendments.length > 0).pop()?.amendments || [],
                 };
             });
         }
 
-        // â”€â”€ GitHub Actions trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // GitHub Actions trigger
 
         async function triggerUpdate() {
             const token = prompt("Enter GitHub Personal Access Token:");
@@ -874,8 +874,8 @@
                   body: JSON.stringify({ ref: 'main' }) }
             );
             alert(r.ok
-                ? "âœ… Update triggered! Check the Actions tab."
-                : `âŒ Failed (${r.status}). Ensure token has 'workflow' scope.`);
+                ? "✅ Update triggered! Check the Actions tab."
+                : `❌ Failed (${r.status}). Ensure token has 'workflow' scope.`);
         }
 
         window.onload = loadData;
