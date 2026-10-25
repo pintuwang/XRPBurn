@@ -284,7 +284,11 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
     type_counts  = Counter()   # every successful tx, by TransactionType
     acct_types   = Counter()   # acct_mgmt bucket only, by TransactionType
     acct_senders = Counter()   # acct_mgmt bucket only, by sending Account
-    batch_inner  = 0           # successful txs carrying tfInnerBatchTxn
+    # Batch (XLS-56) unwrapping counters
+    batch_wrappers        = 0  # Batch outer transactions encountered
+    batch_unwrapped       = 0  # inner txs classified via unwrapping
+    batch_no_inner        = 0  # Batches with no RawTransactions (fallback → acct_mgmt)
+    batch_standalone_skip = 0  # top-level tfInnerBatchTxn txs skipped (avoid double-count)
     ok     = 0
     print(f"  Sampling {SAMPLE_N} ledgers from #{cur_seq:,} "
           f"(stride {SAMPLE_STRIDE})")
@@ -305,11 +309,50 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
                meta.get("TransactionResult", "tesSUCCESS") != "tesSUCCESS":
                 continue
             ttype = tx.get("TransactionType", "")
+
+            # ── Batch unwrapping (XLS-56): classify inner txs individually ──
+            if ttype == "Batch":
+                batch_wrappers += 1
+                raw_txns = tx.get("RawTransactions") or []
+                unwrapped = 0
+                for raw_entry in raw_txns:
+                    if not isinstance(raw_entry, dict):
+                        continue
+                    # Inner tx wrapped in "RawTransaction" (spec) or
+                    # "Transaction" (some nodes) key, or bare dict
+                    inner = (raw_entry.get("RawTransaction")
+                             or raw_entry.get("Transaction")
+                             or raw_entry)
+                    if not isinstance(inner, dict):
+                        continue
+                    itype = inner.get("TransactionType", "")
+                    if not itype:
+                        continue
+                    cat = classify(itype)
+                    counts[cat] += 1
+                    type_counts[itype] += 1
+                    if cat == "acct_mgmt":
+                        acct_types[itype] += 1
+                        acct_senders[inner.get("Account", "?")] += 1
+                    unwrapped += 1
+                batch_unwrapped += unwrapped
+                if unwrapped == 0:
+                    # No inner txs found — count wrapper as acct_mgmt (fallback)
+                    batch_no_inner += 1
+                    counts["acct_mgmt"] += 1
+                    type_counts["Batch"] += 1
+                    acct_types["Batch"] += 1
+                    acct_senders[tx.get("Account", "?")] += 1
+                continue
+
+            # Skip top-level inner-batch duplicates (already counted via unwrap)
+            if int(tx.get("Flags", 0) or 0) & TF_INNER_BATCH_TXN:
+                batch_standalone_skip += 1
+                continue
+
             cat   = classify(ttype)
             counts[cat] += 1
             type_counts[ttype] += 1
-            if int(tx.get("Flags", 0) or 0) & TF_INNER_BATCH_TXN:
-                batch_inner += 1
             if cat == "acct_mgmt":
                 acct_types[ttype] += 1
                 acct_senders[tx.get("Account", "?")] += 1
@@ -332,6 +375,7 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
 
     # ── acct_mgmt drill-down: which tx types and which senders fill the bucket ──
     acct_total = counts["acct_mgmt"]
+    batch_inner_total = batch_unwrapped + batch_standalone_skip
     detail = {
         "sample_txs":      total,
         "sample_ledgers":  ok,
@@ -344,8 +388,12 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
             for a, c in acct_senders.most_common(TOP_SENDERS_N)
         ],
         "acct_mgmt_unique_senders": len(acct_senders),
-        "batch_inner_txs": batch_inner,
-        "batch_inner_share": round(batch_inner / total, 4),
+        "batch_wrappers":        batch_wrappers,
+        "batch_unwrapped_inner": batch_unwrapped,
+        "batch_no_inner":        batch_no_inner,
+        "batch_standalone_skip": batch_standalone_skip,
+        "batch_inner_txs":       batch_inner_total,
+        "batch_inner_share":     round(batch_inner_total / total, 4) if total else 0,
     }
     if acct_total:
         print(f"  acct_mgmt drill-down ({acct_total} txs, "
@@ -355,7 +403,11 @@ def get_categories(cur_seq, ledgers_per_day=17_500):
         print("  top acct_mgmt senders:")
         for s in detail["acct_mgmt_top_senders"]:
             print(f"    {s['account']}  {s['count']:>6}  {s['share']*100:5.1f}%")
-    print(f"  batch inner txs: {batch_inner} ({batch_inner/total*100:.1f}% of sample)")
+    if batch_wrappers:
+        print(f"  Batch unwrapping: {batch_wrappers} wrappers → "
+              f"{batch_unwrapped} inner txs classified "
+              f"({batch_no_inner} had no RawTransactions, "
+              f"{batch_standalone_skip} top-level skipped)")
     return props, projected_tx_m, capped_avg, ok, detail
 
 
