@@ -6351,84 +6351,93 @@
     },
     {
         "date": "2026-10-30",
-        "last_updated": "2026-10-30 00:42:19",
+        "last_updated": "2026-10-30 05:37:08",
         "open_coins_xrp": 99985578507.8,
         "open_seq_xrpl": 107983691,
-        "total_coins_xrp": 99985578507.8,
-        "burn_xrp": null,
+        "total_coins_xrp": 99985577961.21649,
+        "burn_xrp": 546.583511,
         "burn_alert": false,
-        "load_usd_m": 1956.87,
-        "transactions": 0.0,
-        "projected_tx_m": 0.0,
-        "tx_categories": {},
-        "load_categories": {
-            "settlement": 1178.51,
+        "load_usd_m": 2412.55,
+        "transactions": 0.5212,
+        "projected_tx_m": 2.2259,
+        "tx_categories": {
+            "settlement": 0.4019,
             "identity": 0.0,
-            "defi": 602.81,
-            "acct_mgmt": 175.55
+            "defi": 0.0832,
+            "acct_mgmt": 0.0362
+        },
+        "load_categories": {
+            "settlement": 1860.13,
+            "identity": 0.0,
+            "defi": 385.06,
+            "acct_mgmt": 167.36
         },
         "tx_detail": {
-            "sample_txs": 10612,
+            "sample_txs": 9918,
             "sample_ledgers": 40,
             "sample_stride": 1,
             "type_counts": {
-                "Payment": 5299,
-                "OfferCreate": 3044,
-                "CheckCash": 1081,
-                "TicketCreate": 336,
-                "AccountSet": 283,
-                "OfferCancel": 222,
-                "NFTokenCreateOffer": 183,
-                "TrustSet": 108,
-                "NFTokenCancelOffer": 28,
-                "NFTokenMint": 12,
-                "CheckCreate": 11,
-                "AMMDeposit": 3,
-                "NFTokenAcceptOffer": 2
+                "Payment": 7482,
+                "OfferCreate": 1387,
+                "NFTokenCreateOffer": 199,
+                "OfferCancel": 194,
+                "TicketCreate": 188,
+                "CheckCash": 162,
+                "TrustSet": 121,
+                "AccountSet": 114,
+                "NFTokenCancelOffer": 47,
+                "NFTokenMint": 14,
+                "NFTokenAcceptOffer": 3,
+                "CheckCreate": 3,
+                "AMMDeposit": 2,
+                "AccountDelete": 1,
+                "OracleSet": 1
             },
             "acct_mgmt_types": {
-                "TicketCreate": 336,
-                "AccountSet": 283,
-                "NFTokenCreateOffer": 183,
-                "TrustSet": 108,
-                "NFTokenCancelOffer": 28,
-                "NFTokenMint": 12,
-                "NFTokenAcceptOffer": 2
+                "NFTokenCreateOffer": 199,
+                "TicketCreate": 188,
+                "TrustSet": 121,
+                "AccountSet": 114,
+                "NFTokenCancelOffer": 47,
+                "NFTokenMint": 14,
+                "NFTokenAcceptOffer": 3,
+                "AccountDelete": 1,
+                "OracleSet": 1
             },
             "acct_mgmt_top_senders": [
                 {
                     "account": "rMTaAGVd77vAbzDv8qhoMgnZR1T5R3w6Wq",
-                    "count": 84,
-                    "share": 0.0882
+                    "count": 82,
+                    "share": 0.1192
+                },
+                {
+                    "account": "rGENsWZnk2cv5aqWjzFEWxRpBnRKj4jvqL",
+                    "count": 55,
+                    "share": 0.0799
                 },
                 {
                     "account": "rdGzD9oHEUJkiWxiuVA4UnB9f4kF7giQn",
-                    "count": 55,
-                    "share": 0.0578
-                },
-                {
-                    "account": "rf7Db55CXcWgqmHnb1Pjx1WVGNCqMNsyZ",
-                    "count": 50,
-                    "share": 0.0525
+                    "count": 49,
+                    "share": 0.0712
                 },
                 {
                     "account": "rtLMG8Qc4wDjqrdBz3vVhbXwu7PG4N3RQ",
-                    "count": 41,
-                    "share": 0.0431
+                    "count": 39,
+                    "share": 0.0567
                 },
                 {
-                    "account": "r3ASEe1LLnhfCwrHKr4Cg6YS15t52S1MK5",
-                    "count": 32,
-                    "share": 0.0336
+                    "account": "rnHeqy9a1MxQJEYbGBXYNDosZRU7qySsAV",
+                    "count": 35,
+                    "share": 0.0509
                 }
             ],
-            "acct_mgmt_unique_senders": 416,
-            "batch_wrappers": 3457,
-            "batch_unwrapped_inner": 7751,
+            "acct_mgmt_unique_senders": 190,
+            "batch_wrappers": 3460,
+            "batch_unwrapped_inner": 7121,
             "batch_no_inner": 0,
-            "batch_standalone_skip": 284,
-            "batch_inner_txs": 8035,
-            "batch_inner_share": 0.7572
+            "batch_standalone_skip": 133,
+            "batch_inner_txs": 7254,
+            "batch_inner_share": 0.7314
         },
         "rwa_total_usd_m": null,
         "rwa_by_type": {},
@@ -6436,10 +6445,10 @@
         "rwa_by_geography": {},
         "rwa_distributed_m": 192.7,
         "rwa_represented_m": 8210.0,
-        "rlusd_total_m": 2609.9038,
-        "rlusd_xrpl_m": 979.6455,
-        "rlusd_eth_m": 1630.2583,
-        "rlusd_minted_m": -7.5,
+        "rlusd_total_m": 2626.9815,
+        "rlusd_xrpl_m": 993.7222,
+        "rlusd_eth_m": 1633.2593,
+        "rlusd_minted_m": 9.5777,
         "amendments": [
             {
                 "name": "LendingProtocol",
@@ -6472,7 +6481,7 @@
         "is_fallback": false,
         "is_baseline_search": false,
         "is_partial": true,
-        "partial_as_of": "00:42",
+        "partial_as_of": "05:37",
         "backfilled": false
     }
 ]
