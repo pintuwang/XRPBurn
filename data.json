@@ -1,72 +1,5 @@
 [
     {
-        "date": "2026-08-04",
-        "last_updated": "2026-08-04 22:19:42",
-        "open_coins_xrp": 99985631832.10594,
-        "open_seq_xrpl": 106046151,
-        "total_coins_xrp": 99985631585.65411,
-        "burn_xrp": 246.451828,
-        "burn_alert": false,
-        "load_usd_m": 969.76,
-        "transactions": 2.4942,
-        "projected_tx_m": 2.6808,
-        "tx_categories": {
-            "settlement": 0.6642,
-            "identity": 0.0,
-            "defi": 1.7575,
-            "acct_mgmt": 0.0725
-        },
-        "load_categories": {
-            "settlement": 258.25,
-            "identity": 0.0,
-            "defi": 683.31,
-            "acct_mgmt": 28.2
-        },
-        "rwa_total_usd_m": null,
-        "rwa_by_type": {},
-        "rwa_by_issuer": {},
-        "rwa_by_geography": {},
-        "rwa_distributed_m": 212.6,
-        "rwa_represented_m": 4060.0,
-        "rlusd_total_m": 1552.7402,
-        "rlusd_xrpl_m": 851.8947,
-        "rlusd_eth_m": 700.8455,
-        "rlusd_minted_m": 130.2861,
-        "amendments": [
-            {
-                "name": "LendingProtocol",
-                "xls": "XLS-66",
-                "label": "Native Lending (XLS-66)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "SingleAssetVault",
-                "xls": "XLS-65",
-                "label": "Single Asset Vault (XLS-65)",
-                "vote_pct": 0.0,
-                "enabled": false,
-                "status": "pending",
-                "vetoed": false
-            },
-            {
-                "name": "PermissionedDomains",
-                "xls": "XLS-80",
-                "label": "Permissioned Domains (XLS-80)",
-                "vote_pct": 0.0,
-                "enabled": true,
-                "status": "enabled",
-                "vetoed": false
-            }
-        ],
-        "is_fallback": false,
-        "is_baseline_search": false,
-        "is_partial": true,
-        "partial_as_of": "22:19"
-    },
-    {
         "date": "2026-08-05",
         "last_updated": "2026-08-05 23:15:03",
         "open_coins_xrp": 99985631560.57156,
@@ -6486,16 +6419,16 @@
         "open_coins_xrp": 99985575512.5556,
         "open_seq_xrpl": 108026403,
         "total_coins_xrp": 99985574471.55405,
-        "burn_xrp": 1041.001556,
+        "burn_xrp": 1174.265671,
         "burn_alert": true,
         "load_usd_m": 742.07,
-        "transactions": 2.3435,
+        "transactions": 2.6435,
         "projected_tx_m": 2.6435,
         "tx_categories": {
-            "settlement": 1.3919,
+            "settlement": 1.5701,
             "identity": 0.0,
-            "defi": 0.7528,
-            "acct_mgmt": 0.1988
+            "defi": 0.8492,
+            "acct_mgmt": 0.2242
         },
         "load_categories": {
             "settlement": 440.76,
@@ -6610,8 +6543,132 @@
         ],
         "is_fallback": false,
         "is_baseline_search": false,
-        "is_partial": true,
+        "is_partial": false,
         "partial_as_of": "21:16",
+        "backfilled": true
+    },
+    {
+        "date": "2026-11-02",
+        "last_updated": "2026-11-02 00:37:16",
+        "open_coins_xrp": 99985574338.28993,
+        "open_seq_xrpl": 108048962,
+        "total_coins_xrp": 99985574338.28993,
+        "burn_xrp": null,
+        "burn_alert": false,
+        "load_usd_m": 702.91,
+        "transactions": 0.0,
+        "projected_tx_m": 0.0,
+        "tx_categories": {},
+        "load_categories": {
+            "settlement": 318.9,
+            "identity": 0.0,
+            "defi": 314.06,
+            "acct_mgmt": 69.95
+        },
+        "tx_detail": {
+            "sample_txs": 6974,
+            "sample_ledgers": 40,
+            "sample_stride": 1,
+            "type_counts": {
+                "OfferCreate": 3011,
+                "Payment": 2203,
+                "CheckCash": 955,
+                "TicketCreate": 403,
+                "NFTokenCreateOffer": 112,
+                "OfferCancel": 104,
+                "AccountSet": 83,
+                "TrustSet": 74,
+                "NFTokenCancelOffer": 21,
+                "CheckCreate": 6,
+                "AccountDelete": 1,
+                "AMMDeposit": 1
+            },
+            "acct_mgmt_types": {
+                "TicketCreate": 403,
+                "NFTokenCreateOffer": 112,
+                "AccountSet": 83,
+                "TrustSet": 74,
+                "NFTokenCancelOffer": 21,
+                "AccountDelete": 1
+            },
+            "acct_mgmt_top_senders": [
+                {
+                    "account": "rf7Db55CXcWgqmHnb1Pjx1WVGNCqMNsyZ",
+                    "count": 71,
+                    "share": 0.1023
+                },
+                {
+                    "account": "rdGzD9oHEUJkiWxiuVA4UnB9f4kF7giQn",
+                    "count": 44,
+                    "share": 0.0634
+                },
+                {
+                    "account": "rtLMG8Qc4wDjqrdBz3vVhbXwu7PG4N3RQ",
+                    "count": 38,
+                    "share": 0.0548
+                },
+                {
+                    "account": "rSHEKzMpMajiG6sS4nLL3pFzZa4Q886z4",
+                    "count": 29,
+                    "share": 0.0418
+                },
+                {
+                    "account": "rDdCYqspZfED1jp3m6AUUBhL4WrGytTzjs",
+                    "count": 18,
+                    "share": 0.0259
+                }
+            ],
+            "acct_mgmt_unique_senders": 443,
+            "batch_wrappers": 1315,
+            "batch_unwrapped_inner": 3307,
+            "batch_no_inner": 0,
+            "batch_standalone_skip": 81,
+            "batch_inner_txs": 3388,
+            "batch_inner_share": 0.4858
+        },
+        "rwa_total_usd_m": null,
+        "rwa_by_type": {},
+        "rwa_by_issuer": {},
+        "rwa_by_geography": {},
+        "rwa_distributed_m": 192.7,
+        "rwa_represented_m": 8500.0,
+        "rlusd_total_m": 2433.2976,
+        "rlusd_xrpl_m": 711.8286,
+        "rlusd_eth_m": 1721.469,
+        "rlusd_minted_m": 0.0,
+        "amendments": [
+            {
+                "name": "LendingProtocol",
+                "xls": "XLS-66",
+                "label": "Native Lending (XLS-66)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "SingleAssetVault",
+                "xls": "XLS-65",
+                "label": "Single Asset Vault (XLS-65)",
+                "vote_pct": 0.0,
+                "enabled": false,
+                "status": "pending",
+                "vetoed": false
+            },
+            {
+                "name": "PermissionedDomains",
+                "xls": "XLS-80",
+                "label": "Permissioned Domains (XLS-80)",
+                "vote_pct": 0.0,
+                "enabled": true,
+                "status": "enabled",
+                "vetoed": false
+            }
+        ],
+        "is_fallback": false,
+        "is_baseline_search": false,
+        "is_partial": true,
+        "partial_as_of": "00:37",
         "backfilled": false
     }
 ]
